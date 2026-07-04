@@ -32,7 +32,11 @@ def _to_result(hit: dict) -> SearchResult:
         "over the chunk text. Results are score-ordered and highlighted; "
         "identical queries are served from a 5-minute Redis cache."
     ),
-    responses={400: {"model": ErrorResponse, "description": "Empty query"}},
+    responses={
+        400: {"model": ErrorResponse, "description": "Empty query"},
+        404: {"model": ErrorResponse, "description": "Route not found"},
+        500: {"model": ErrorResponse, "description": "Elasticsearch or server error"},
+    },
 )
 async def search(
     q: str = Query(..., description="Search query"),

@@ -96,7 +96,10 @@ async def _save_upload(file: UploadFile) -> tuple[str, str]:
         "Accept a PDF or DOCX file (validated by content, max 20 MB), persist "
         "its metadata, and return the created document."
     ),
-    responses={400: {"model": ErrorResponse, "description": "Invalid type or size"}},
+    responses={
+        400: {"model": ErrorResponse, "description": "Invalid type or size"},
+        500: {"model": ErrorResponse, "description": "Server error"},
+    },
 )
 async def upload_document(
     file: UploadFile,

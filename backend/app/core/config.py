@@ -2,6 +2,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """App configuration, sourced from environment variables (and `.env` locally)."""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     POSTGRES_USER: str = "app"

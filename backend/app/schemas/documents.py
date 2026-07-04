@@ -7,6 +7,8 @@ from app.schemas.common import DocumentStatus
 
 
 class DocumentInfo(BaseModel):
+    """Metadata for one uploaded document."""
+
     id: UUID
     file_name: str
     status: DocumentStatus

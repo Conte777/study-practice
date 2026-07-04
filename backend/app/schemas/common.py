@@ -4,6 +4,8 @@ from pydantic import BaseModel
 
 
 class DocumentStatus(StrEnum):
+    """Lifecycle stage of an uploaded document."""
+
     uploaded = "uploaded"
     indexing = "indexing"
     indexed = "indexed"
@@ -11,4 +13,6 @@ class DocumentStatus(StrEnum):
 
 
 class ErrorResponse(BaseModel):
+    """Uniform error body returned by the API's global exception handlers."""
+
     detail: str

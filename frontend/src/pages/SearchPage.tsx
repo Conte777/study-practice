@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { search } from "../services/api";
 import type { SearchResult } from "../types/api";
+import { renderSnippet } from "../utils/highlight";
 
 const PAGE_SIZE = 10;
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -18,6 +20,7 @@ export default function SearchPage() {
     setError(null);
     const res = await search(q, 0, PAGE_SIZE);
     setLoading(false);
+    setAppliedQuery(q);
     if (!res.ok) {
       setError(res.error);
       setResults([]);
@@ -58,7 +61,7 @@ export default function SearchPage() {
           <li data-testid="result-card" className="result-card" key={r.chunk_id}>
             <span data-testid="result-file-name">{r.file_name}</span>
             <span data-testid="result-page">стр. {r.page}</span>
-            <p className="result-card__snippet">{r.text}</p>
+            <p className="result-card__snippet">{renderSnippet(r.text, r.highlight, appliedQuery)}</p>
             <span data-testid="result-score">{r.score.toFixed(2)}</span>
           </li>
         ))}

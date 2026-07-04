@@ -13,7 +13,7 @@ demo user first.
 ```
 docker compose up -d
 uv run --with reportlab --with python-docx python tests/fixtures/generate.py
-HOST=http://localhost:8000 python tests/quality/seed.py          # upload + index 8 golden docs
+HOST=http://localhost:8000 python tests/quality/seed.py          # upload + index golden docs
 HOST=http://localhost:8000 python tests/quality/precision_at_3.py  # regenerates the table below
 ```
 
@@ -39,7 +39,9 @@ set is seeded with one topical document per query (see `tests/fixtures/generate.
 `write_golden`), so BM25 over the Russian-analyzed `text` field cleanly separates
 them — no query is ambiguous between two golden docs.
 
-This is an upper-bound-friendly corpus (8 documents, one clear match each): 1.00
+This is an upper-bound-friendly corpus (8 golden documents serving 10 queries —
+queries 1–4 reuse `ok.pdf`/`ok.docx`, the rest map one-to-one), one clear match
+each: 1.00
 demonstrates the ranker and indexing pipeline work end-to-end, not that ranking
 is hard here. The reusable value is the harness + golden set — add noisier or
 overlapping documents to the index and re-run to measure precision under

@@ -1,7 +1,13 @@
 # Test fixtures — name manifest (contract QA ↔ BE)
 
-Binaries are added by the QA stage-1 (the ТЗ permits committing them **only** here).
-These names are already hard-wired into the BE upload gates — treat them as a contract.
+Binaries are **git-ignored** — generate them on demand; `generate.py` is the
+source of truth (creates all names in the table below plus the QA-05 golden set):
+
+```bash
+uv run --with reportlab --with python-docx python tests/fixtures/generate.py
+```
+
+These names are hard-wired into the BE upload gates — treat them as a contract.
 
 | File | Purpose | Expected upload result |
 |---|---|---|

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { search } from "../services/api";
-import type { SearchResult } from "../types/api";
+import { getSearchHistory, search } from "../services/api";
+import type { SearchHistoryItem, SearchResult } from "../types/api";
 import { renderSnippet } from "../utils/highlight";
 
 const PAGE_SIZE = 10;
+const HISTORY_SIZE = 10;
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
@@ -12,12 +13,20 @@ export default function SearchPage() {
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<SearchHistoryItem[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const loadingRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const runSearch = async () => {
-    const q = query.trim();
+  const loadHistory = useCallback(async () => {
+    const res = await getSearchHistory(HISTORY_SIZE);
+    if (res.ok) setHistory(res.data);
+  }, []);
+
+  const runSearch = async (raw = query) => {
+    const q = raw.trim();
     if (!q || loadingRef.current) return;
+    setHistoryOpen(false);
     loadingRef.current = true;
     setLoading(true);
     setError(null);
@@ -33,6 +42,7 @@ export default function SearchPage() {
     }
     setResults(res.data.results);
     setTotal(res.data.total);
+    loadHistory(); // refresh after a successful search
   };
 
   const loadMore = useCallback(async () => {
@@ -64,16 +74,45 @@ export default function SearchPage() {
     <section>
       <h2>Поиск</h2>
       <div className="search-bar">
-        <input
-          data-testid="search-input"
-          placeholder="Введите запрос"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") runSearch();
-          }}
-        />
-        <button data-testid="search-button" onClick={runSearch} disabled={loading}>
+        <div className="search-bar__field">
+          <input
+            data-testid="search-input"
+            placeholder="Введите запрос"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => {
+              loadHistory();
+              setHistoryOpen(true);
+            }}
+            // blur closes after the item's onMouseDown had a chance to fire
+            onBlur={() => setHistoryOpen(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") runSearch();
+              if (e.key === "Escape") setHistoryOpen(false);
+            }}
+          />
+          {historyOpen && history.length > 0 && (
+            <ul data-testid="search-history" className="search-history">
+              {history.map((h, i) => (
+                <li
+                  data-testid="search-history-item"
+                  className="search-history__item"
+                  key={`${h.query}-${i}`}
+                  // onMouseDown, not onClick: fires before the input's onBlur closes the list
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setQuery(h.query);
+                    runSearch(h.query);
+                  }}
+                >
+                  <span className="search-history__query">{h.query}</span>
+                  <span className="search-history__count">{h.results_count}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <button data-testid="search-button" onClick={() => runSearch()} disabled={loading}>
           Искать
         </button>
       </div>

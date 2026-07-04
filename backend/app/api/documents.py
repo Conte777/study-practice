@@ -1,58 +1,141 @@
-from datetime import UTC, datetime
+"""Document endpoints: upload (with content/size validation) and listing."""
+
+import os
+import tempfile
+import zipfile
+from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.schemas import DocumentInfo, DocumentStatus, DocumentUploadResponse, ErrorResponse
+from app.core.db import get_db
+from app.models import Document
+from app.schemas import DocumentInfo, DocumentUploadResponse, ErrorResponse
+from app.schemas.common import DocumentStatus
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-# ponytail: upload-mock validates content-type/size (real, cheap, gives FE the 400 case),
-# but does not parse or index — that's BE stages 2/3.
-ALLOWED_CONTENT_TYPES = {
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-}
-MAX_SIZE_BYTES = 20 * 1024 * 1024  # ТЗ: 20 МБ limit
+MAX_SIZE_BYTES = 20 * 1024 * 1024  # ТЗ: 20 MB limit
+_READ_CHUNK = 1 << 20  # 1 MiB streaming reads
+
+
+def _unlink(path: str) -> None:
+    if os.path.exists(path):
+        os.unlink(path)
+
+
+def _sniff_type(path: str, header: bytes) -> str | None:
+    """Detect the file type from content, not extension.
+
+    Args:
+        path: Path to the saved upload (needed to inspect DOCX zip entries).
+        header: The first bytes of the file.
+
+    Returns:
+        ``"pdf"``, ``"docx"``, or ``None`` if the content matches neither.
+    """
+    if header.startswith(b"%PDF"):
+        return "pdf"
+    if header.startswith(b"PK\x03\x04"):
+        try:
+            with zipfile.ZipFile(path) as zf:
+                if any(name.startswith("word/") for name in zf.namelist()):
+                    return "docx"
+        except zipfile.BadZipFile:
+            return None
+    return None
+
+
+async def _save_upload(file: UploadFile) -> tuple[str, str]:
+    """Stream an upload to a temp file, enforcing the size cap and content type.
+
+    Reads in bounded chunks so a huge upload never lands fully in memory; aborts
+    as soon as the cumulative size exceeds the limit.
+
+    Returns:
+        A ``(temp_path, file_type)`` tuple.
+
+    Raises:
+        HTTPException: 400 for empty files, oversize uploads, or unsupported
+            content.
+    """
+    tmp = tempfile.NamedTemporaryFile(delete=False)  # noqa: SIM115 — outlives this scope
+    header = b""
+    total = 0
+    try:
+        while chunk := await file.read(_READ_CHUNK):
+            total += len(chunk)
+            if total > MAX_SIZE_BYTES:
+                raise HTTPException(status_code=400, detail="File exceeds 20 MB limit")
+            if not header:
+                header = chunk[:8]
+            tmp.write(chunk)
+        tmp.close()
+        if total == 0:
+            raise HTTPException(status_code=400, detail="Empty file")
+        file_type = _sniff_type(tmp.name, header)
+        if file_type is None:
+            raise HTTPException(
+                status_code=400, detail="Unsupported file type (expected PDF or DOCX)"
+            )
+        return tmp.name, file_type
+    except Exception:
+        tmp.close()
+        _unlink(tmp.name)
+        raise
 
 
 @router.post(
     "/upload",
     response_model=DocumentUploadResponse,
-    responses={400: {"model": ErrorResponse}},
+    summary="Upload a document",
+    description=(
+        "Accept a PDF or DOCX file (validated by content, max 20 MB), persist "
+        "its metadata, and return the created document."
+    ),
+    responses={400: {"model": ErrorResponse, "description": "Invalid type or size"}},
 )
-async def upload_document(file: UploadFile) -> DocumentUploadResponse:
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
-        raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.content_type}")
+async def upload_document(
+    file: UploadFile,
+    db: Annotated[Session, Depends(get_db)],
+) -> DocumentInfo:
+    """Validate an uploaded document, persist its metadata, and return it."""
+    path, _file_type = await _save_upload(file)
+    _unlink(path)  # stage 1: no indexing yet — discard the temp file
 
-    size = len(await file.read())
-    if size == 0:
-        raise HTTPException(status_code=400, detail="Empty file")
-    if size > MAX_SIZE_BYTES:
-        raise HTTPException(status_code=400, detail="File exceeds 20 MB limit")
-
-    return DocumentInfo(
+    doc = Document(
         id=uuid4(),
         file_name=file.filename or "unnamed",
         status=DocumentStatus.uploaded,
-        uploaded_at=datetime.now(UTC),
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return DocumentInfo(
+        id=doc.id,
+        file_name=doc.file_name,
+        status=doc.status,
+        uploaded_at=doc.uploaded_at,
     )
 
 
-@router.get("", response_model=list[DocumentInfo])
-async def list_documents() -> list[DocumentInfo]:
-    # mock: BE stage replaces with DB query
+@router.get(
+    "",
+    response_model=list[DocumentInfo],
+    summary="List documents",
+    description="Return all uploaded documents, newest first.",
+)
+async def list_documents(db: Annotated[Session, Depends(get_db)]) -> list[DocumentInfo]:
+    """Return all documents ordered by upload time (newest first)."""
+    rows = db.scalars(select(Document).order_by(Document.uploaded_at.desc())).all()
     return [
         DocumentInfo(
-            id=uuid4(),
-            file_name="ok.pdf",
-            status=DocumentStatus.indexed,
-            uploaded_at=datetime.now(UTC),
-        ),
-        DocumentInfo(
-            id=uuid4(),
-            file_name="ok.docx",
-            status=DocumentStatus.indexing,
-            uploaded_at=datetime.now(UTC),
-        ),
+            id=r.id,
+            file_name=r.file_name,
+            status=r.status,
+            uploaded_at=r.uploaded_at,
+        )
+        for r in rows
     ]

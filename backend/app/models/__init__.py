@@ -1,1 +1,3 @@
-# ponytail: empty package — BE stages add ORM models here.
+from app.models.document import Base, Document
+
+__all__ = ["Base", "Document"]

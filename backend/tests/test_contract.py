@@ -1,6 +1,10 @@
-"""Smoke checks that the mock endpoints honor the wire contract (schemas + statuses)."""
+"""Smoke checks that the endpoints honor the wire contract (schemas + statuses)."""
 
 import io
+
+import pytest
+
+from tests.conftest import es_available, make_docx
 
 
 def test_health(client):
@@ -26,13 +30,21 @@ def test_upload_ok(client):
 
 
 def test_search_ok(client):
-    r = client.get("/api/v1/search", params={"q": "test"})
+    if not es_available():
+        pytest.skip("Elasticsearch not reachable")
+    term = "капибара"
+    up = client.post(
+        "/api/v1/documents/upload",
+        files={"file": ("k.docx", make_docx(f"Уникальное слово {term} в тексте"), "")},
+    )
+    assert up.status_code == 200
+    r = client.get("/api/v1/search", params={"q": term})
     assert r.status_code == 200
     body = r.json()
-    assert "total" in body and body["results"]
+    assert body["total"] >= 1
     first = body["results"][0]
     assert set(first) == {"chunk_id", "file_name", "page", "text", "score", "highlight"}
-    assert "<mark>" in first["highlight"]
+    assert "<mark>" in (first["highlight"] or "")
 
 
 def test_search_empty_q(client):

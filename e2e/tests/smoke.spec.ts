@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 // QA-02 smoke: the FE is now auth-gated, so with no backend the only thing that
 // renders is the login screen. Assert its contract selectors — this proves the
 // E2E harness is wired without needing the full stack. The logged-in upload/
-// search selectors are covered by critical-path.spec.ts (E2E_FULL_FLOW=1).
+// search selectors are covered by critical-path.spec.ts (needs E2E_BASE_URL).
 
 test("login gate exposes its contract selectors", async ({ page }) => {
   await page.goto("/");

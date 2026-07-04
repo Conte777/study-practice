@@ -13,9 +13,17 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.config import settings
 from app.models import Base
 
-_connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
+_is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+_connect_args = {"check_same_thread": False} if _is_sqlite else {}
+# Login holds a connection through the slow bcrypt verify, so a 50-user burst
+# exhausts the default 5+10 pool. Give Postgres real headroom; sqlite (tests)
+# uses a pool that rejects these kwargs, so skip them there.
+# ponytail: static sizes; wire to settings only if load profiles start varying.
+_pool_args = {} if _is_sqlite else {"pool_size": 20, "max_overflow": 40}
 
-engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True, connect_args=_connect_args)
+engine = create_engine(
+    settings.DATABASE_URL, pool_pre_ping=True, connect_args=_connect_args, **_pool_args
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

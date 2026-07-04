@@ -36,8 +36,26 @@ GOLDEN = [
     ("thesis-guide.pdf", "application/pdf"),
     ("library.pdf", "application/pdf"),
     ("scholarship.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
-    ("registration.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    (
+        "registration.docx",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ),
 ]
+
+DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+# QA-05 distractors: share vocabulary with a golden query but are not its answer,
+# so Precision@3 is measured under real ambiguity (see tests/fixtures/generate.py).
+DISTRACTORS = [
+    ("deep-learning-seminar.pdf", "application/pdf"),
+    ("timetable.pdf", "application/pdf"),
+    ("dissertation-defense.pdf", "application/pdf"),
+    ("campus-hours.pdf", "application/pdf"),
+    ("financial-aid-faq.docx", DOCX_TYPE),
+    ("enrollment-guide.docx", DOCX_TYPE),
+]
+
+CORPUS = GOLDEN + DISTRACTORS
 
 
 def login() -> str:
@@ -83,22 +101,27 @@ def count_indexed() -> int:
 
 
 def main() -> int:
-    missing = [f for f, _ in GOLDEN if not (FIXTURES / f).exists()]
+    missing = [f for f, _ in CORPUS if not (FIXTURES / f).exists()]
     if missing:
-        print(f"missing fixtures: {missing}\nRun tests/fixtures/generate.py first.", file=sys.stderr)
+        print(
+            f"missing fixtures: {missing}\nRun tests/fixtures/generate.py first.", file=sys.stderr
+        )
         return 1
 
     token = login()
-    print(f"== uploading {len(GOLDEN)} golden docs to {HOST} ==")
-    for filename, content_type in GOLDEN:
+    print(
+        f"== uploading {len(CORPUS)} docs "
+        f"({len(GOLDEN)} golden + {len(DISTRACTORS)} distractors) to {HOST} =="
+    )
+    for filename, content_type in CORPUS:
         upload(token, filename, content_type)
 
     print("== waiting for indexing ==")
     for _ in range(60):
         indexed = count_indexed()
-        print(f"  indexed {indexed}/{len(GOLDEN)}")
-        if indexed >= len(GOLDEN):
-            print("golden set indexed.")
+        print(f"  indexed {indexed}/{len(CORPUS)}")
+        if indexed >= len(CORPUS):
+            print("corpus indexed.")
             return 0
         time.sleep(2)
     print("indexing timed out", file=sys.stderr)

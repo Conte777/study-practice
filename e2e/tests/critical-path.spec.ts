@@ -6,17 +6,16 @@ import { login } from "./helpers";
 
 // QA-02 critical path: upload → indexing → search → display.
 //
-// Gated behind E2E_FULL_FLOW=1 because it needs the *wired* frontend
-// (FE-02/03/04/07: real upload input, status polling, search fetch, highlight
-// render) AND the full stack up (docker compose: app + postgres + ES + redis).
-// The current FE is a static skeleton, so this stays off by default; the smoke
-// suite proves the harness meanwhile. Flip the env var once FE is wired.
-const FULL_FLOW = process.env.E2E_FULL_FLOW === "1";
+// Needs the full stack (docker compose: app + postgres + ES + redis) — the FE
+// is now fully wired, so the only prerequisite is a live backend. Runs whenever
+// E2E_BASE_URL points at it; skips when the suite serves the frontend alone via
+// `vite preview` (no backend), where the smoke suite proves the harness.
+const FULL_STACK = Boolean(process.env.E2E_BASE_URL);
 
 const OK_PDF = path.resolve(__dirname, "../../tests/fixtures/ok.pdf");
 
 test.describe("critical path", () => {
-  test.skip(!FULL_FLOW, "needs wired FE + full stack (set E2E_FULL_FLOW=1)");
+  test.skip(!FULL_STACK, "needs the full stack — set E2E_BASE_URL (docker compose up)");
 
   test("upload a document, wait for indexed, then find it in search", async ({ page, request }) => {
     await login(page, request);

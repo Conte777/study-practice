@@ -7,7 +7,7 @@ Critical path: **upload → indexing → search → display**.
 | Spec | Runs when | Purpose |
 |---|---|---|
 | `tests/smoke.spec.ts` | always | Login-gate contract: `data-testid`s render + a valid status label after auth. |
-| `tests/critical-path.spec.ts` | `E2E_FULL_FLOW=1` | Full QA-02 flow: upload → index → search. Needs the full stack up. Skipped by default. |
+| `tests/critical-path.spec.ts` | `E2E_BASE_URL` set | Full QA-02 flow: upload → index → search. Runs against a live stack; skipped when the frontend is served alone (no backend). |
 
 The FE is fully wired — auth-gate, upload with status polling, search. Both
 specs authenticate first via `tests/helpers.ts`.
@@ -26,7 +26,7 @@ npx playwright test smoke.spec.ts --repeat-each=3
 
 # Full flow — stack up:
 docker compose up -d --wait
-E2E_BASE_URL=http://localhost:8080 E2E_FULL_FLOW=1 npx playwright test
+E2E_BASE_URL=http://localhost:8080 npx playwright test
 ```
 
 ## Auth (`helpers.ts`)

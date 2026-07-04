@@ -103,20 +103,68 @@ _GOLDEN_DOCX: dict[str, str] = {
 }
 
 
-def write_golden(here: Path) -> None:
+# QA-05 distractors: each shares vocabulary with one golden query but is NOT its
+# expected answer, so Precision@3 is measured under real term overlap instead of
+# a corpus where every query has one obvious match. The expected doc keeps the
+# query's discriminating term (e.g. "thesis", "library", "registration") that
+# the distractor lacks, so BM25 must actually rank on it.
+_DISTRACTOR_PDF: dict[str, str] = {
+    "deep-learning-seminar.pdf": (
+        "Deep learning seminar. This seminar covers neural networks, gradient "
+        "descent, and model training techniques for advanced students. "
+        "Registration for the learning seminar is open."
+    ),  # competes with ml-lecture.pdf on "machine learning lecture"
+    "timetable.pdf": (
+        "Weekly class schedule and timetable. This timetable lists room "
+        "assignments and class times for the spring term and is updated each "
+        "spring."
+    ),  # competes with schedule.pdf on "exam schedule spring"
+    "dissertation-defense.pdf": (
+        "Dissertation defense guidelines. These guidelines describe the defense "
+        "committee, presentation formatting, and submission of the final "
+        "dissertation."
+    ),  # competes with thesis-guide.pdf on "thesis submission guidelines"
+    "campus-hours.pdf": (
+        "Campus building hours. The student center and gym opening hours vary by "
+        "season. Check building opening hours during public holidays."
+    ),  # competes with library.pdf on "library opening hours"
+}
+_DISTRACTOR_DOCX: dict[str, str] = {
+    "financial-aid-faq.docx": (
+        "Financial aid FAQ. This FAQ answers questions about grants, loans, and "
+        "application deadlines for student financial aid."
+    ),  # competes with scholarship.docx on "scholarship application form"
+    "enrollment-guide.docx": (
+        "Enrollment guide. This guide explains how to add and drop courses and "
+        "lists semester dates and deadlines for enrolled students."
+    ),  # competes with registration.docx on "course registration deadline"
+}
+
+
+def _write_pdfs(here: Path, docs: dict[str, str]) -> None:
     from reportlab.pdfgen import canvas
 
-    for name, text in _GOLDEN_PDF.items():
+    for name, text in docs.items():
         c = canvas.Canvas(str(here / name))
         c.drawString(72, 720, text)
         c.showPage()
         c.save()
-    for name, text in _GOLDEN_DOCX.items():
-        from docx import Document
 
+
+def _write_docxs(here: Path, docs: dict[str, str]) -> None:
+    from docx import Document
+
+    for name, text in docs.items():
         doc = Document()
         doc.add_paragraph(text)
         doc.save(str(here / name))
+
+
+def write_golden(here: Path) -> None:
+    _write_pdfs(here, _GOLDEN_PDF)
+    _write_docxs(here, _GOLDEN_DOCX)
+    _write_pdfs(here, _DISTRACTOR_PDF)
+    _write_docxs(here, _DISTRACTOR_DOCX)
 
 
 def main() -> None:

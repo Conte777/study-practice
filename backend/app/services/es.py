@@ -35,7 +35,7 @@ _INDEX_MAPPINGS = {
     "properties": {
         "chunk_id": {"type": "keyword"},
         "document_id": {"type": "keyword"},
-        "file_name": {"type": "keyword"},
+        "file_name": {"type": "text", "analyzer": "ru", "fields": {"raw": {"type": "keyword"}}},
         "page_number": {"type": "integer"},
         "text": {"type": "text", "analyzer": "ru"},
     }
@@ -160,7 +160,7 @@ def search_chunks(q: str, from_: int, size: int) -> tuple[int, list[SearchHit]]:
         index=INDEX,
         from_=from_,
         size=size,
-        query={"multi_match": {"query": q, "fields": ["text"]}},
+        query={"multi_match": {"query": q, "fields": ["text", "file_name^2"]}},
         highlight={"fields": {"text": {"pre_tags": ["<mark>"], "post_tags": ["</mark>"]}}},
     )
     total = response["hits"]["total"]["value"]

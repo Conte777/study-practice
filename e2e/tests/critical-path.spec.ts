@@ -25,7 +25,10 @@ test.describe("critical path", () => {
     await page.getByTestId("upload-dropzone").click();
     await (await chooser).setFiles(OK_PDF);
 
-    const item = page.getByTestId("upload-item").filter({ hasText: "ok.pdf" });
+    // .last(): a persistent stack (no delete endpoint) accumulates prior ok.pdf
+    // rows across runs — target the just-uploaded one to avoid strict-mode
+    // violations. Swap for a per-run unique filename if ordering isn't newest-last.
+    const item = page.getByTestId("upload-item").filter({ hasText: "ok.pdf" }).last();
     await expect(item).toBeVisible();
 
     // --- Indexing: wait for "Готово" (indexed), not a fixed sleep ---

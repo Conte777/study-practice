@@ -35,4 +35,6 @@ already-running stack.
 - **No `sleep`.** Web-first assertions (`toBeVisible`, `toHaveText`) auto-wait;
   indexing is awaited via the `upload-status` → `Готово` transition.
 - **Stable selectors** — `data-testid` from `CONTRACTS.md`, never text/CSS.
-- **Isolation** — each test starts from `/` with a fresh context.
+- **Isolation** — fresh browser context per test. Backend data is *not* reset
+  (no delete endpoint yet), so the full-flow spec targets the just-uploaded row
+  via `.last()`; switch to a per-run unique filename once teardown exists.

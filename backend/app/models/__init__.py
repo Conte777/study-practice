@@ -1,3 +1,3 @@
-from app.models.document import Base, Document
+from app.models.document import Base, Document, DocumentStatus
 
-__all__ = ["Base", "Document"]
+__all__ = ["Base", "Document", "DocumentStatus"]

@@ -1,15 +1,8 @@
-from enum import StrEnum
-
 from pydantic import BaseModel
 
+from app.models.document import DocumentStatus
 
-class DocumentStatus(StrEnum):
-    """Lifecycle stage of an uploaded document."""
-
-    uploaded = "uploaded"
-    indexing = "indexing"
-    indexed = "indexed"
-    error = "error"
+__all__ = ["DocumentStatus", "ErrorResponse"]
 
 
 class ErrorResponse(BaseModel):

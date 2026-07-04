@@ -1,6 +1,7 @@
 """Smoke checks that the endpoints honor the wire contract (schemas + statuses)."""
 
 import io
+import os
 
 import pytest
 
@@ -55,6 +56,40 @@ def test_unknown_route_404_with_detail_body(client):
     r = client.get("/api/v1/nope")
     assert r.status_code == 404
     assert "detail" in r.json()
+
+
+def test_invalid_pagination_returns_422_with_string_detail(client):
+    r = client.get("/api/v1/search", params={"q": "x", "size": 0})
+    assert r.status_code == 422
+    assert isinstance(r.json()["detail"], str)
+
+
+def test_upload_db_failure_cleans_up_temp_file(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    import app.api.documents as documents_mod
+    from app.main import app
+
+    captured = {}
+    real_unlink = documents_mod.unlink
+
+    def spy_unlink(path):
+        captured["path"] = path
+        real_unlink(path)
+
+    def failing_commit(_self):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(documents_mod, "unlink", spy_unlink)
+    monkeypatch.setattr("sqlalchemy.orm.Session.commit", failing_commit)
+
+    no_raise_client = TestClient(app, raise_server_exceptions=False)
+    pdf = ("ok.pdf", io.BytesIO(b"%PDF-1.4 fake"), "application/pdf")
+    r = no_raise_client.post("/api/v1/documents/upload", files={"file": pdf})
+
+    assert r.status_code == 500
+    assert "path" in captured
+    assert not os.path.exists(captured["path"])
 
 
 def test_unhandled_error_returns_500_with_detail_body(monkeypatch):

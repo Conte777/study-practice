@@ -35,6 +35,20 @@ def test_reindex_is_idempotent():
     assert _count(doc_id) == 2
 
 
+def test_ensure_index_tolerates_concurrent_create_race():
+    es.ensure_index()  # index already exists at this point
+
+    # Simulate a second caller losing the exists-check race: exists() lies
+    # (says "no") so create() runs against an index that's already there.
+    client = es.get_client()
+    original_exists = client.indices.exists
+    client.indices.exists = lambda **k: False
+    try:
+        es.ensure_index()  # must not raise
+    finally:
+        client.indices.exists = original_exists
+
+
 def test_mapping_has_russian_analyzer():
     es.ensure_index()
     client = es.get_client()

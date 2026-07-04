@@ -4,22 +4,20 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ErrorResponse, SearchResponse, SearchResult
 from app.services import cache
-from app.services.es import search_chunks
+from app.services.es import SearchHit, search_chunks
 
 router = APIRouter(tags=["search"])
 
 
-def _to_result(hit: dict) -> SearchResult:
-    """Map a raw Elasticsearch hit to the wire ``SearchResult`` shape."""
-    src = hit["_source"]
-    fragments = hit.get("highlight", {}).get("text")
+def _to_result(hit: SearchHit) -> SearchResult:
+    """Map a service-layer search hit to the wire ``SearchResult`` shape."""
     return SearchResult(
-        chunk_id=src["chunk_id"],
-        file_name=src["file_name"],
-        page=src["page_number"],
-        text=src["text"],
-        score=hit["_score"],
-        highlight=fragments[0] if fragments else None,
+        chunk_id=hit.chunk_id,
+        file_name=hit.file_name,
+        page=hit.page,
+        text=hit.text,
+        score=hit.score,
+        highlight=hit.highlight,
     )
 
 
@@ -35,6 +33,7 @@ def _to_result(hit: dict) -> SearchResult:
     responses={
         400: {"model": ErrorResponse, "description": "Empty query"},
         404: {"model": ErrorResponse, "description": "Route not found"},
+        422: {"model": ErrorResponse, "description": "Invalid pagination parameters"},
         500: {"model": ErrorResponse, "description": "Elasticsearch or server error"},
     },
 )

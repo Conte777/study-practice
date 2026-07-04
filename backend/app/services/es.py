@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass
 from functools import lru_cache
 
-from elasticsearch import Elasticsearch, helpers
+from elasticsearch import BadRequestError, Elasticsearch, helpers
 
 from app.core.config import settings
 
@@ -55,6 +55,27 @@ class Chunk:
     text: str
 
 
+@dataclass(frozen=True)
+class SearchHit:
+    """A single scored search match, already translated out of ES's wire shape.
+
+    Attributes:
+        chunk_id: Deterministic ``{document_id}:{index}`` chunk identifier.
+        file_name: Original file name of the source document.
+        page: 1-based source page the chunk came from.
+        text: Full chunk text.
+        score: Elasticsearch relevance score.
+        highlight: A highlighted fragment (with ``<mark>`` tags), if any.
+    """
+
+    chunk_id: str
+    file_name: str
+    page: int
+    text: str
+    score: float
+    highlight: str | None
+
+
 @lru_cache(maxsize=1)
 def get_client() -> Elasticsearch:
     """Return a process-wide Elasticsearch client built from settings."""
@@ -62,11 +83,21 @@ def get_client() -> Elasticsearch:
 
 
 def ensure_index() -> None:
-    """Create the ``documents`` index with the Russian analyzer if absent."""
+    """Create the ``documents`` index with the Russian analyzer if absent.
+
+    Tolerates the index already existing even when the preceding ``exists``
+    check said otherwise: concurrent callers (background indexing jobs firing
+    at the same time) can race to create it, and only one create wins.
+    """
     client = get_client()
-    if not client.indices.exists(index=INDEX):
+    if client.indices.exists(index=INDEX):
+        return
+    try:
         client.indices.create(index=INDEX, settings=_INDEX_SETTINGS, mappings=_INDEX_MAPPINGS)
         logger.info("Created Elasticsearch index %r", INDEX)
+    except BadRequestError as exc:
+        if exc.error != "resource_already_exists_exception":
+            raise
 
 
 def index_document(document_id: str, file_name: str, chunks: list[Chunk]) -> int:
@@ -101,7 +132,20 @@ def index_document(document_id: str, file_name: str, chunks: list[Chunk]) -> int
     return len(actions)
 
 
-def search_chunks(q: str, from_: int, size: int) -> tuple[int, list[dict]]:
+def _to_hit(raw: dict) -> SearchHit:
+    src = raw["_source"]
+    fragments = raw.get("highlight", {}).get("text")
+    return SearchHit(
+        chunk_id=src["chunk_id"],
+        file_name=src["file_name"],
+        page=src["page_number"],
+        text=src["text"],
+        score=raw["_score"],
+        highlight=fragments[0] if fragments else None,
+    )
+
+
+def search_chunks(q: str, from_: int, size: int) -> tuple[int, list[SearchHit]]:
     """Run a full-text search over indexed chunks.
 
     Args:
@@ -110,8 +154,7 @@ def search_chunks(q: str, from_: int, size: int) -> tuple[int, list[dict]]:
         size: Page size.
 
     Returns:
-        A ``(total, hits)`` tuple where ``hits`` are raw Elasticsearch hit
-        dicts (each with ``_source``, ``_score`` and optional ``highlight``).
+        A ``(total, hits)`` tuple, translated out of Elasticsearch's wire shape.
     """
     response = get_client().search(
         index=INDEX,
@@ -121,4 +164,4 @@ def search_chunks(q: str, from_: int, size: int) -> tuple[int, list[dict]]:
         highlight={"fields": {"text": {"pre_tags": ["<mark>"], "post_tags": ["</mark>"]}}},
     )
     total = response["hits"]["total"]["value"]
-    return total, response["hits"]["hits"]
+    return total, [_to_hit(h) for h in response["hits"]["hits"]]

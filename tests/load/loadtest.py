@@ -35,7 +35,15 @@ class SearchUser(HttpUser):
     def search_hot(self) -> None:
         q = random.choice(HOT_QUERIES)
         # name= groups all hot queries into one row regardless of q value.
-        self.client.get("/api/v1/search", params={"q": q}, name="/search [hot]")
+        # Validate the body too — a silent 200 with empty/broken results (e.g. an
+        # ES regression) must count as a failure, not a fast success.
+        with self.client.get(
+            "/api/v1/search", params={"q": q}, name="/search [hot]", catch_response=True
+        ) as resp:
+            if resp.status_code != 200:
+                resp.failure(f"status {resp.status_code}")
+            elif not resp.json().get("results"):
+                resp.failure("empty results")
 
     @task(1)
     def search_unique(self) -> None:

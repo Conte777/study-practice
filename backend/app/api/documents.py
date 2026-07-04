@@ -7,8 +7,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFi
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.core.db import get_db
-from app.models import Document, DocumentStatus
+from app.models import Document, DocumentStatus, User
 from app.schemas import DocumentInfo, DocumentUploadResponse, ErrorResponse
 from app.services.pipeline import process_document
 from app.services.uploads import InvalidUploadError, save_upload, unlink
@@ -33,6 +34,7 @@ async def upload_document(
     file: UploadFile,
     background_tasks: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_user)],
 ) -> DocumentInfo:
     """Validate an uploaded document, persist its metadata, and return it.
 

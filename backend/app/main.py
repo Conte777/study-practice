@@ -9,9 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from app.api import documents, search
+from app.api import auth, documents, search
 from app.core.config import settings
 from app.core.db import init_db
+from app.core.seed import seed_demo_user
 from app.services.es import ensure_index
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(_app: FastAPI):
     """Create database tables and the Elasticsearch index on startup."""
     init_db()
+    seed_demo_user()
     try:
         ensure_index()
     except Exception:  # noqa: BLE001 — ES may be down; degrade, don't block startup
@@ -66,6 +68,7 @@ app.add_middleware(
 )
 
 api = APIRouter(prefix="/api/v1")
+api.include_router(auth.router)
 api.include_router(documents.router)
 api.include_router(search.router)
 

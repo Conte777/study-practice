@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     # Comma-separated list of allowed CORS origins.
     CORS_ORIGINS: str = "http://localhost:8080"
 
+    # Auth. Override JWT_SECRET in every real deployment.
+    JWT_SECRET: str = "change-me-in-prod"
+    JWT_EXPIRE_MINUTES: int = 60 * 24
+    # Demo account seeded at startup so the FE/E2E can log in. Empty user disables seeding.
+    DEMO_USER: str = "demo"
+    DEMO_PASSWORD: str = "demo12345"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]

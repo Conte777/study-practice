@@ -3,12 +3,14 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+.coverage
 backend/.venv/
 
 node_modules/
 frontend/dist/
 frontend/node_modules/
 
-# Fixtures binaries added by QA stage (README manifest tracked)
+# Fixtures binaries added by QA stage (README manifest + generator tracked)
 tests/fixtures/*
 !tests/fixtures/README.md
+!tests/fixtures/generate.py

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { search } from "../services/api";
 import type { SearchResult } from "../types/api";
 import { renderSnippet } from "../utils/highlight";
@@ -10,17 +10,23 @@ export default function SearchPage() {
   const [appliedQuery, setAppliedQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [total, setTotal] = useState<number | null>(null);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadingRef = useRef(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   const runSearch = async () => {
     const q = query.trim();
-    if (!q) return;
+    if (!q || loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     setError(null);
     const res = await search(q, 0, PAGE_SIZE);
+    loadingRef.current = false;
     setLoading(false);
     setAppliedQuery(q);
+    setPage(0);
     if (!res.ok) {
       setError(res.error);
       setResults([]);
@@ -30,6 +36,33 @@ export default function SearchPage() {
     setResults(res.data.results);
     setTotal(res.data.total);
   };
+
+  const loadMore = useCallback(async () => {
+    if (loadingRef.current || total === null || results.length >= total) return;
+    loadingRef.current = true;
+    setLoading(true);
+    const nextPage = page + 1;
+    const res = await search(appliedQuery, nextPage * PAGE_SIZE, PAGE_SIZE);
+    loadingRef.current = false;
+    setLoading(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    setPage(nextPage);
+    setTotal(res.data.total);
+    setResults((prev) => [...prev, ...res.data.results]);
+  }, [appliedQuery, page, results.length, total]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || total === null || results.length >= total) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) loadMore();
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadMore, total, results.length]);
 
   return (
     <section>
@@ -67,7 +100,9 @@ export default function SearchPage() {
         ))}
       </ul>
 
-      <nav data-testid="pagination" />
+      <nav data-testid="pagination">
+        {total !== null && results.length < total && <div ref={sentinelRef} className="pagination__sentinel" />}
+      </nav>
     </section>
   );
 }

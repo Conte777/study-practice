@@ -6,7 +6,7 @@ import zipfile
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,7 @@ from app.core.db import get_db
 from app.models import Document
 from app.schemas import DocumentInfo, DocumentUploadResponse, ErrorResponse
 from app.schemas.common import DocumentStatus
+from app.services.pipeline import process_document
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -99,11 +100,16 @@ async def _save_upload(file: UploadFile) -> tuple[str, str]:
 )
 async def upload_document(
     file: UploadFile,
+    background_tasks: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
 ) -> DocumentInfo:
-    """Validate an uploaded document, persist its metadata, and return it."""
-    path, _file_type = await _save_upload(file)
-    _unlink(path)  # stage 1: no indexing yet — discard the temp file
+    """Validate an uploaded document, persist its metadata, and return it.
+
+    Parsing, chunking, and Elasticsearch indexing run in a background task so
+    the response isn't blocked on them; the document's ``status`` progresses
+    from ``uploaded`` to ``indexing``/``indexed`` (or ``error``) as that runs.
+    """
+    path, file_type = await _save_upload(file)
 
     doc = Document(
         id=uuid4(),
@@ -113,6 +119,7 @@ async def upload_document(
     db.add(doc)
     db.commit()
     db.refresh(doc)
+    background_tasks.add_task(process_document, str(doc.id), doc.file_name, path, file_type)
     return DocumentInfo(
         id=doc.id,
         file_name=doc.file_name,

@@ -13,6 +13,7 @@ forces cache misses to expose the cold path. Keep both to bracket real latency.
 
 from __future__ import annotations
 
+import os
 import random
 
 from locust import HttpUser, between, task
@@ -30,6 +31,15 @@ HOT_QUERIES = [
 class SearchUser(HttpUser):
     # Think time between requests — models a human reading results, not a hammer.
     wait_time = between(0.5, 2.0)
+
+    def on_start(self) -> None:
+        # /search requires auth — log in once per user and pin the bearer token
+        # on the client so every subsequent request carries it.
+        user = os.environ.get("DEMO_USER", "demo")
+        password = os.environ.get("DEMO_PASSWORD", "demo12345")
+        resp = self.client.post("/api/v1/auth/login", json={"username": user, "password": password})
+        resp.raise_for_status()
+        self.client.headers["Authorization"] = f"Bearer {resp.json()['access_token']}"
 
     @task(4)
     def search_hot(self) -> None:

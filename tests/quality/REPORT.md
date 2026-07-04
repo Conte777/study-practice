@@ -4,34 +4,43 @@
 *hits* if its expected document appears in the top-3 results of `GET /search`.
 `Precision@3 = hits / 10`.
 
-**Run:** `HOST=http://localhost:8000 python tests/quality/precision_at_3.py`
-(regenerates the table below).
+**Target:** real backend — Elasticsearch `multi_match` ranking over the seeded
+golden set (not a mock). `/search` requires auth; the harness logs in as the
+demo user first.
+
+**Reproduce:**
+
+```
+docker compose up -d
+uv run --with reportlab --with python-docx python tests/fixtures/generate.py
+HOST=http://localhost:8000 python tests/quality/seed.py          # upload + index 8 golden docs
+HOST=http://localhost:8000 python tests/quality/precision_at_3.py  # regenerates the table below
+```
 
 | # | Query | Expected doc | Position | Hit@3 |
 |---|---|---|---|---|
 | 1 | knowledge base sample | `ok.pdf` | 1 | ✅ |
-| 2 | searchable docx content | `ok.docx` | 2 | ✅ |
+| 2 | searchable docx content | `ok.docx` | 1 | ✅ |
 | 3 | elasticsearch relevance | `ok.pdf` | 1 | ✅ |
-| 4 | chunk boundaries | `ok.docx` | 2 | ✅ |
-| 5 | machine learning lecture | `ml-lecture.pdf` | — | ❌ |
-| 6 | exam schedule spring | `schedule.pdf` | — | ❌ |
-| 7 | scholarship application form | `scholarship.docx` | — | ❌ |
-| 8 | thesis submission guidelines | `thesis-guide.pdf` | — | ❌ |
-| 9 | library opening hours | `library.pdf` | — | ❌ |
-| 10 | course registration deadline | `registration.docx` | — | ❌ |
+| 4 | chunk boundaries | `ok.docx` | 1 | ✅ |
+| 5 | machine learning lecture | `ml-lecture.pdf` | 1 | ✅ |
+| 6 | exam schedule spring | `schedule.pdf` | 1 | ✅ |
+| 7 | scholarship application form | `scholarship.docx` | 1 | ✅ |
+| 8 | thesis submission guidelines | `thesis-guide.pdf` | 1 | ✅ |
+| 9 | library opening hours | `library.pdf` | 1 | ✅ |
+| 10 | course registration deadline | `registration.docx` | 1 | ✅ |
 
-**Precision@3 = 4/10 = 0.40**
+**Precision@3 = 10/10 = 1.00**
 
-## Commentary on the misses
+## Commentary
 
-The 6 misses are **not a ranking failure** — they are an artifact of the mock.
-The current `/search` returns a fixed pair (`ok.pdf`, `ok.docx`) for every query,
-so by construction only the 4 queries whose expected document is one of those two
-can hit; the other 6 can never match. The 0.40 is thus an **upper bound imposed
-by the mock**, not a measurement of relevance.
+Every expected document ranks **first**, not merely inside the top-3. The golden
+set is seeded with one topical document per query (see `tests/fixtures/generate.py`
+`write_golden`), so BM25 over the Russian-analyzed `text` field cleanly separates
+them — no query is ambiguous between two golden docs.
 
-The value of this stage is the **golden set + harness**: queries 5–10 already
-encode realistic ground truth (lecture / schedule / scholarship / thesis /
-library / registration documents). Once BE wires real Elasticsearch indexing,
-re-running the same script yields a genuine Precision@3 over the real ranker —
-no methodology change needed, only the expected documents must exist in the index.
+This is an upper-bound-friendly corpus (8 documents, one clear match each): 1.00
+demonstrates the ranker and indexing pipeline work end-to-end, not that ranking
+is hard here. The reusable value is the harness + golden set — add noisier or
+overlapping documents to the index and re-run to measure precision under
+realistic ambiguity without changing the method.

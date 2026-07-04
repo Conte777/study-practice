@@ -1,18 +1,80 @@
 #!/usr/bin/env bash
-# ponytail: one-shot local bootstrap. DO stages replace with proper make/compose flow.
+# Seed the running stack with open-access PDF lectures via the public API (DO-07).
+# Dev-deps bootstrap moved to ./dev-setup.sh.
 set -euo pipefail
 
-[ -f .env ] || cp .env.example .env
+API_URL="${API_URL:-http://localhost:8000}"
+SEED_DIR="./seed"
+TIMEOUT="${TIMEOUT:-60}"
 
-echo "== backend =="
-(cd backend && uv sync)
+# Open-access arXiv lecture PDFs (stable URLs, no auth). filename<TAB>url
+SOURCES=(
+  "attention.pdf	https://arxiv.org/pdf/1706.03762"
+  "resnet.pdf	https://arxiv.org/pdf/1512.03385"
+  "vgg.pdf	https://arxiv.org/pdf/1409.1556"
+  "adam.pdf	https://arxiv.org/pdf/1412.6980"
+  "bert.pdf	https://arxiv.org/pdf/1810.04805"
+  "gan.pdf	https://arxiv.org/pdf/1406.2661"
+  "batchnorm.pdf	https://arxiv.org/pdf/1502.03167"
+  "word2vec.pdf	https://arxiv.org/pdf/1301.3781"
+  "densenet.pdf	https://arxiv.org/pdf/1608.06993"
+  "unet.pdf	https://arxiv.org/pdf/1505.04597"
+)
 
-echo "== pre-commit hooks =="
-./backend/.venv/bin/pre-commit install  # config auto-detected at repo root
+echo "== waiting for backend at ${API_URL} =="
+for ((i = 0; i < TIMEOUT; i++)); do
+  if curl -fsS "${API_URL}/api/v1/health" 2>/dev/null | grep -q '"status":"ok"'; then
+    break
+  fi
+  [ "$i" -eq $((TIMEOUT - 1)) ] && { echo "backend not healthy after ${TIMEOUT}s" >&2; exit 1; }
+  sleep 1
+done
 
-echo "== frontend =="
-(cd frontend && npm install)
+echo "== downloading ${#SOURCES[@]} PDFs to ${SEED_DIR} =="
+mkdir -p "$SEED_DIR"
+for entry in "${SOURCES[@]}"; do
+  name="${entry%%$'\t'*}"
+  url="${entry#*$'\t'}"
+  dest="${SEED_DIR}/${name}"
+  if [ -s "$dest" ]; then
+    echo "  have ${name}, skip"
+  else
+    echo "  fetch ${name}"
+    curl -fSL -o "$dest" "$url"
+  fi
+done
 
-echo "Done. Run backend:  cd backend && uv run uvicorn app.main:app --reload"
-echo "     Run frontend: cd frontend && npm run dev"
-echo "     Or full stack: docker compose up --build"
+echo "== uploading via ${API_URL}/api/v1/documents/upload =="
+ok=0
+fail=0
+for entry in "${SOURCES[@]}"; do
+  name="${entry%%$'\t'*}"
+  dest="${SEED_DIR}/${name}"
+  if id=$(curl -fsS -F "file=@${dest};type=application/pdf" \
+      "${API_URL}/api/v1/documents/upload" | grep -o '"id":"[^"]*"'); then
+    echo "  uploaded ${name} -> ${id}"
+    ok=$((ok + 1))
+  else
+    echo "  FAILED ${name}" >&2
+    fail=$((fail + 1))
+  fi
+done
+
+echo "== summary: ${ok} uploaded, ${fail} failed =="
+[ "$fail" -eq 0 ] || exit 1
+
+echo "== waiting for indexing =="
+total=${#SOURCES[@]}
+for ((i = 0; i < TIMEOUT; i++)); do
+  indexed=$(curl -fsS "${API_URL}/api/v1/documents" | grep -o '"status":"indexed"' | wc -l | tr -d ' ')
+  echo "  indexed ${indexed}/${total}"
+  [ "$indexed" -ge "$total" ] && break
+  [ "$i" -eq $((TIMEOUT - 1)) ] && { echo "indexing timed out" >&2; exit 1; }
+  sleep 2
+done
+
+echo "== sample search =="
+term="${SEARCH_TERM:-learning}"
+hits=$(curl -fsS "${API_URL}/api/v1/search?q=${term}" | grep -o '"total":[0-9]*' | head -1)
+echo "  q='${term}' -> ${hits}"
+echo "Seed complete."

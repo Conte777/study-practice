@@ -8,6 +8,7 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "pydantic-settings>=2.7",
     "python-multipart>=0.0.18",
+    "prometheus-fastapi-instrumentator>=7.0",
     # BE stages add: sqlalchemy, psycopg, elasticsearch, redis, pdfplumber, python-docx
 ]
 

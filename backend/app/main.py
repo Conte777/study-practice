@@ -1,10 +1,15 @@
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api import documents, search
 from app.core.config import settings
 
 app = FastAPI(title="University Knowledge Search", version="0.1.0")
+
+# DO-06: default metrics = http_requests_total + http_request_duration_seconds, labelled
+# per handler (RPS & latency of /search fall out of this). Exposes GET /metrics.
+Instrumentator().instrument(app).expose(app)
 
 app.add_middleware(
     CORSMiddleware,

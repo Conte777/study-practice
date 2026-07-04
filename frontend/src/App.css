@@ -39,12 +39,21 @@
   color: var(--text-h);
 }
 
+.status {
+  color: var(--text);
+}
+
 .status--error {
   color: #d33;
 }
 
 .status--indexed {
   color: #2a2;
+}
+
+.status--uploaded,
+.status--indexing {
+  color: var(--accent);
 }
 
 .search-bar {
@@ -90,6 +99,10 @@
 .result-card__snippet mark {
   background: #ffe066;
   color: inherit;
+}
+
+.pagination__sentinel {
+  height: 1px;
 }
 
 .counter {

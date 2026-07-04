@@ -7,7 +7,7 @@ function escapeRegExp(s: string): string {
 // Backend highlight is untrusted HTML-ish text. We never parse it as markup —
 // we only recognize the literal `<mark>…</mark>` marker and render everything
 // else as plain text nodes, so injected tags show up as inert characters.
-export function renderServerHighlight(highlight: string): ReactNode[] {
+function renderServerHighlight(highlight: string): ReactNode[] {
   return highlight
     .split(/(<mark>[\s\S]*?<\/mark>)/)
     .filter((part) => part.length > 0)
@@ -18,7 +18,7 @@ export function renderServerHighlight(highlight: string): ReactNode[] {
 }
 
 // Fallback when the backend sends no `highlight`: match query words client-side.
-export function renderClientHighlight(text: string, query: string): ReactNode[] {
+function renderClientHighlight(text: string, query: string): ReactNode[] {
   const words = [...new Set(query.trim().split(/\s+/).filter(Boolean))].map(escapeRegExp);
   if (words.length === 0) return [text];
 

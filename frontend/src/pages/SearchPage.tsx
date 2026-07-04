@@ -10,7 +10,6 @@ export default function SearchPage() {
   const [appliedQuery, setAppliedQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [total, setTotal] = useState<number | null>(null);
-  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadingRef = useRef(false);
@@ -26,7 +25,6 @@ export default function SearchPage() {
     loadingRef.current = false;
     setLoading(false);
     setAppliedQuery(q);
-    setPage(0);
     if (!res.ok) {
       setError(res.error);
       setResults([]);
@@ -41,18 +39,16 @@ export default function SearchPage() {
     if (loadingRef.current || total === null || results.length >= total) return;
     loadingRef.current = true;
     setLoading(true);
-    const nextPage = page + 1;
-    const res = await search(appliedQuery, nextPage * PAGE_SIZE, PAGE_SIZE);
+    const res = await search(appliedQuery, results.length, PAGE_SIZE);
     loadingRef.current = false;
     setLoading(false);
     if (!res.ok) {
       setError(res.error);
       return;
     }
-    setPage(nextPage);
     setTotal(res.data.total);
     setResults((prev) => [...prev, ...res.data.results]);
-  }, [appliedQuery, page, results.length, total]);
+  }, [appliedQuery, results.length, total]);
 
   useEffect(() => {
     const el = sentinelRef.current;

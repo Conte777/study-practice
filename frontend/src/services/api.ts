@@ -20,7 +20,11 @@ async function request<T>(run: () => Promise<Response>): Promise<ApiResult<T>> {
     const body = (await res.json().catch(() => ({}))) as { detail?: string };
     return { ok: false, error: body.detail ?? `HTTP ${res.status}` };
   }
-  return { ok: true, data: (await res.json()) as T };
+  try {
+    return { ok: true, data: (await res.json()) as T };
+  } catch {
+    return { ok: false, error: "Некорректный ответ сервера" };
+  }
 }
 
 export function uploadDocument(file: File): Promise<ApiResult<DocumentUploadResponse>> {

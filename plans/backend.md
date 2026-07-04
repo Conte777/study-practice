@@ -13,6 +13,11 @@
 Гейт = ① runnable-проверка ② чеклист Done ③ ревью sub-agent'ом
 (`Task(subagent_type="review-code", …)`).
 
+**Рабочий процесс:**
+- После каждой пройденной стадии — коммит через `mcp__git__commit` (если есть что коммитить).
+- После выполнения всего плана — `git push -u HEAD` и создать PR по шаблону
+  `.github/pull_request_template.md` (`gh pr create`).
+
 ---
 
 ## Стадия 1 — Модель и хранение истории

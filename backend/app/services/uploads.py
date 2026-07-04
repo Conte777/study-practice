@@ -4,10 +4,14 @@ import os
 import tempfile
 import zipfile
 
-from fastapi import HTTPException, UploadFile
+from fastapi import UploadFile
 
 MAX_SIZE_BYTES = 20 * 1024 * 1024  # 20 MB limit
 _READ_CHUNK = 1 << 20  # 1 MiB streaming reads
+
+
+class InvalidUploadError(Exception):
+    """Raised when an upload fails content/size validation; callers map it to HTTP 400."""
 
 
 def unlink(path: str) -> None:
@@ -48,8 +52,8 @@ async def save_upload(file: UploadFile) -> tuple[str, str]:
         A ``(temp_path, file_type)`` tuple.
 
     Raises:
-        HTTPException: 400 for empty files, oversize uploads, or unsupported
-            content.
+        InvalidUploadError: For empty files, oversize uploads, or unsupported
+            content. Callers map this to an HTTP 400.
     """
     tmp = tempfile.NamedTemporaryFile(delete=False)  # noqa: SIM115 — outlives this scope
     header = b""
@@ -58,18 +62,16 @@ async def save_upload(file: UploadFile) -> tuple[str, str]:
         while chunk := await file.read(_READ_CHUNK):
             total += len(chunk)
             if total > MAX_SIZE_BYTES:
-                raise HTTPException(status_code=400, detail="File exceeds 20 MB limit")
+                raise InvalidUploadError("File exceeds 20 MB limit")
             if not header:
                 header = chunk[:8]
             tmp.write(chunk)
         tmp.close()
         if total == 0:
-            raise HTTPException(status_code=400, detail="Empty file")
+            raise InvalidUploadError("Empty file")
         file_type = sniff_type(tmp.name, header)
         if file_type is None:
-            raise HTTPException(
-                status_code=400, detail="Unsupported file type (expected PDF or DOCX)"
-            )
+            raise InvalidUploadError("Unsupported file type (expected PDF or DOCX)")
         return tmp.name, file_type
     except Exception:
         tmp.close()

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from app.models.document import DocumentStatus
+from app.core.enums import DocumentStatus
 
 __all__ = ["DocumentStatus", "ErrorResponse"]
 

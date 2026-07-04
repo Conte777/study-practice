@@ -7,15 +7,14 @@ without propagating — a broken document must not take down the worker.
 """
 
 import logging
-import os
 import uuid
 
 from app.core.db import SessionLocal
-from app.models import Document
-from app.schemas.common import DocumentStatus
+from app.models import Document, DocumentStatus
 from app.services.chunker import chunk_text
 from app.services.es import Chunk, index_document
 from app.services.parser import extract_text
+from app.services.uploads import unlink
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +44,7 @@ def process_document(document_id: str, file_name: str, path: str, file_type: str
         _set_status(db, document_id, DocumentStatus.error)
     finally:
         db.close()
-        if os.path.exists(path):
-            os.unlink(path)
+        unlink(path)
 
 
 def _set_status(db, document_id: str, status: DocumentStatus) -> None:

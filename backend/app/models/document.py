@@ -2,19 +2,13 @@
 
 import uuid
 from datetime import UTC, datetime
-from enum import StrEnum
 
 from sqlalchemy import DateTime, String, Uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from app.core.enums import DocumentStatus
 
-class DocumentStatus(StrEnum):
-    """Lifecycle stage of an uploaded document."""
-
-    uploaded = "uploaded"
-    indexing = "indexing"
-    indexed = "indexed"
-    error = "error"
+__all__ = ["Base", "Document", "DocumentStatus"]
 
 
 class Base(DeclarativeBase):

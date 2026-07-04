@@ -3,16 +3,15 @@
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.models import Document
+from app.models import Document, DocumentStatus
 from app.schemas import DocumentInfo, DocumentUploadResponse, ErrorResponse
-from app.schemas.common import DocumentStatus
 from app.services.pipeline import process_document
-from app.services.uploads import save_upload, unlink
+from app.services.uploads import InvalidUploadError, save_upload, unlink
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -41,7 +40,10 @@ async def upload_document(
     the response isn't blocked on them; the document's ``status`` progresses
     from ``uploaded`` to ``indexing``/``indexed`` (or ``error``) as that runs.
     """
-    path, file_type = await save_upload(file)
+    try:
+        path, file_type = await save_upload(file)
+    except InvalidUploadError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     doc = Document(
         id=uuid4(),
@@ -50,8 +52,7 @@ async def upload_document(
     )
     try:
         db.add(doc)
-        db.commit()
-        db.refresh(doc)
+        db.commit()  # expire_on_commit=False: doc's fields (incl. server defaults) stay usable
     except Exception:
         unlink(path)  # nothing will run the background job to clean this up
         raise

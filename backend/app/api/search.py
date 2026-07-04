@@ -1,40 +1,56 @@
+"""Full-text search endpoint backed by Elasticsearch with a Redis result cache."""
+
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ErrorResponse, SearchResponse, SearchResult
+from app.services import cache
+from app.services.es import SearchHit, search_chunks
 
 router = APIRouter(tags=["search"])
+
+
+def _to_result(hit: SearchHit) -> SearchResult:
+    """Map a service-layer search hit to the wire ``SearchResult`` shape."""
+    return SearchResult(
+        chunk_id=hit.chunk_id,
+        file_name=hit.file_name,
+        page=hit.page,
+        text=hit.text,
+        score=hit.score,
+        highlight=hit.highlight,
+    )
 
 
 @router.get(
     "/search",
     response_model=SearchResponse,
-    responses={400: {"model": ErrorResponse}},
+    summary="Full-text search",
+    description=(
+        "Search indexed document chunks with a Russian-analyzed `multi_match` "
+        "over the chunk text. Results are score-ordered and highlighted; "
+        "identical queries are served from a 5-minute Redis cache."
+    ),
+    responses={
+        400: {"model": ErrorResponse, "description": "Empty query"},
+        404: {"model": ErrorResponse, "description": "Route not found"},
+        422: {"model": ErrorResponse, "description": "Invalid pagination parameters"},
+        500: {"model": ErrorResponse, "description": "Elasticsearch or server error"},
+    },
 )
 async def search(
     q: str = Query(..., description="Search query"),
-    from_: int = Query(0, alias="from", ge=0),
-    size: int = Query(10, ge=1, le=100),
+    from_: int = Query(0, alias="from", ge=0, description="Pagination offset"),
+    size: int = Query(10, ge=1, le=100, description="Page size"),
 ) -> SearchResponse:
+    """Search indexed chunks, returning score-ordered, highlighted results."""
     if not q.strip():
         raise HTTPException(status_code=400, detail="Query 'q' must not be empty")
 
-    # mock: BE stage 4 replaces with Elasticsearch query. highlight = ES pre/post-tags <mark>.
-    results = [
-        SearchResult(
-            chunk_id="chunk-1",
-            file_name="ok.pdf",
-            page=1,
-            text=f"This is a sample passage matching {q} in the knowledge base.",
-            score=1.42,
-            highlight=f"This is a sample passage matching <mark>{q}</mark> in the knowledge base.",
-        ),
-        SearchResult(
-            chunk_id="chunk-2",
-            file_name="ok.docx",
-            page=3,
-            text=f"Another chunk that mentions {q} with lower relevance.",
-            score=0.87,
-            highlight=f"Another chunk that mentions <mark>{q}</mark> with lower relevance.",
-        ),
-    ]
-    return SearchResponse(total=len(results), results=results)
+    cached = cache.get_cached(q, from_, size)
+    if cached is not None:
+        return SearchResponse(**cached)
+
+    total, hits = search_chunks(q, from_, size)
+    response = SearchResponse(total=total, results=[_to_result(h) for h in hits])
+    cache.set_cached(q, from_, size, response.model_dump())
+    return response

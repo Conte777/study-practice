@@ -1,14 +1,11 @@
-from enum import StrEnum
-
 from pydantic import BaseModel
 
+from app.core.enums import DocumentStatus
 
-class DocumentStatus(StrEnum):
-    uploaded = "uploaded"
-    indexing = "indexing"
-    indexed = "indexed"
-    error = "error"
+__all__ = ["DocumentStatus", "ErrorResponse"]
 
 
 class ErrorResponse(BaseModel):
+    """Uniform error body returned by the API's global exception handlers."""
+
     detail: str

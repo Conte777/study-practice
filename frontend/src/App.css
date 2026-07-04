@@ -56,18 +56,122 @@
   color: var(--accent);
 }
 
+/* FE-02: indeterminate bar while pending, filled green when indexed. */
+.progress {
+  flex-basis: 100%;
+  width: 100%;
+  height: 6px;
+  border: none;
+  border-radius: 3px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--accent-bg);
+  overflow: hidden;
+}
+
+.progress::-webkit-progress-bar {
+  background: var(--accent-bg);
+  border-radius: 3px;
+}
+
+.progress::-webkit-progress-value,
+.progress::-moz-progress-bar {
+  background: var(--accent);
+  border-radius: 3px;
+}
+
+.progress--done::-webkit-progress-value,
+.progress--done::-moz-progress-bar {
+  background: #2a2;
+}
+
 .search-bar {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.search-bar__field {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 0;
 }
 
 .search-bar input {
-  flex: 1 1 240px;
+  width: 100%;
   min-width: 0;
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 6px;
+}
+
+.search-history {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-width: 100%;
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.search-history__item {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.search-history__item:hover {
+  background: var(--accent-bg);
+}
+
+.search-history__query {
+  overflow-wrap: anywhere;
+  color: var(--text-h);
+}
+
+.search-history__count {
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 320px;
+  margin: 16px auto 0;
+  text-align: left;
+}
+
+.login__form input {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.login__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.login__actions button {
+  flex: 1;
 }
 
 .results {
@@ -265,6 +369,42 @@
   border-top: 1px solid var(--border);
   @media (max-width: 1024px) {
     height: 48px;
+  }
+}
+
+/* FE-09: phones 320–480px — stack controls, full-width buttons, no h-scroll. */
+@media (max-width: 480px) {
+  main nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  main nav button {
+    flex: 1 1 100%;
+  }
+
+  .search-bar {
+    flex-direction: column;
+  }
+
+  .search-bar__field {
+    flex-basis: auto;
+    width: 100%;
+  }
+
+  .search-bar button {
+    width: 100%;
+  }
+
+  .doc-list__item,
+  .result-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .login__form {
+    max-width: 100%;
   }
 }
 

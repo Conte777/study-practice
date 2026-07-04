@@ -2,6 +2,8 @@ import path from "node:path";
 
 import { expect, test } from "@playwright/test";
 
+import { login } from "./helpers";
+
 // QA-02 critical path: upload → indexing → search → display.
 //
 // Gated behind E2E_FULL_FLOW=1 because it needs the *wired* frontend
@@ -16,7 +18,8 @@ const OK_PDF = path.resolve(__dirname, "../../tests/fixtures/ok.pdf");
 test.describe("critical path", () => {
   test.skip(!FULL_FLOW, "needs wired FE + full stack (set E2E_FULL_FLOW=1)");
 
-  test("upload a document, wait for indexed, then find it in search", async ({ page }) => {
+  test("upload a document, wait for indexed, then find it in search", async ({ page, request }) => {
+    await login(page, request);
     await page.goto("/");
 
     // --- Upload ---
@@ -48,6 +51,7 @@ test.describe("critical path", () => {
     await expect(card.getByTestId("result-page")).toBeVisible();
     await expect(card.getByTestId("result-score")).toBeVisible();
     // Highlight contract: matched term wrapped in <mark> (sanitized on FE).
-    await expect(card.locator("mark")).toBeVisible();
+    // .first(): a multi-word query yields one <mark> per term, so scope to one.
+    await expect(card.locator("mark").first()).toBeVisible();
   });
 });

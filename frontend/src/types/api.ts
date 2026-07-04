@@ -15,6 +15,17 @@ export interface ErrorResponse {
   detail: string;
 }
 
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
+export interface SearchHistoryItem {
+  query: string;
+  results_count: number;
+  created_at: string; // ISO datetime
+}
+
 export interface DocumentInfo {
   id: string; // UUID
   file_name: string;

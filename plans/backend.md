@@ -1,106 +1,94 @@
-# План: Backend (BE)
+# План доделок: Backend (BE)
 
-**Роль:** разработка REST API, интеграция с Elasticsearch, парсинг документов, кеш.
-**Стек:** Python 3.12, FastAPI, SQLAlchemy + PostgreSQL, Elasticsearch (analysis-ru), Redis, pdfplumber, python-docx, pytest.
-**Директория:** `backend/` (см. структуру репозитория в ТЗ).
+**Ветка:** `feat/be-search-history`
+**Роль:** REST API, ES, парсинг, кеш.
+**Директория:** `backend/`
 
-Стадии идут по фичам. Переход на следующую стадию **только после прохождения гейта**.
-Гейт = ① runnable-проверка ② чеклист Done (привязка к ID ТЗ) ③ ревью sub-agent'ом.
+**Что не сделано:**
+- «Сохранение истории поисковых запросов» (Раздел 2, общие требования).
+  Сейчас `GET /search` нигде не пишет запрос; единственная модель — `Document`.
+- Авторизация по упрощённой схеме (логин/пароль, без ролей) — ТЗ допускает и «без авторизации»,
+  но раз решили делать, добавляем простую.
 
-Как запускать ревью гейта:
-> Task(subagent_type="review-code", prompt="Проверь стадию N плана backend/…: соответствие требованиям <ID>, обработка ошибок, edge-cases парсинга/валидации. Верни confirmed-findings.")
+Гейт = ① runnable-проверка ② чеклист Done ③ ревью sub-agent'ом
+(`Task(subagent_type="review-code", …)`).
 
 ---
 
-## Стадия 1 — Каркас + загрузка/валидация (BE-01, BE-02, BE-03)
+## Стадия 1 — Модель и хранение истории
 
 **Задачи**
-- `app/main.py` — FastAPI app, `/docs` (Swagger), health-check.
-- `app/core/config.py` — pydantic-settings, чтение из env.
-- `app/models/document.py` — SQLAlchemy-модель (uuid, file_name, status, uploaded_at).
-- `POST /api/v1/documents/upload` — приём файла.
-- Валидация: формат ∈ {PDF, DOCX}, размер ≤ 20 МБ → иначе HTTP 400 с телом `{"detail": "..."}`.
-- UUID на каждый документ (BE-03).
+- `app/models/search_query.py` — SQLAlchemy-модель `SearchQuery`:
+  `id: UUID`, `query: str`, `results_count: int`, `created_at: datetime` (server default `now()`).
+- Экспорт в `app/models/__init__.py`; таблица создаётся в `init_db()` (уже вызывается в lifespan).
+- В `app/api/search.py` после успешного ответа ES писать запись в БД.
+  - Писать **до** возврата, но **не** блокировать ответ на ошибке записи: обернуть в try/except + `logger.exception`, историю считать best-effort.
+  - Писать **только на промах кеша** (cache-hit не должен множить строки) — либо, наоборот, писать всегда, но тогда фиксировать `from_==0` запрос, чтобы пагинация не дублировала. Решение: писать только при `from_ == 0` (первая страница = один пользовательский запрос).
+  - `results_count = total` из ES.
 
 **Гейт 1**
-- Команда: `curl -F file=@tests/fixtures/ok.pdf localhost:8000/api/v1/documents/upload` → 200 + uuid.
-- Команда: `curl -F file=@tests/fixtures/big.bin ...` (25 МБ) → 400 с описанием.
-- Команда: `curl -F file=@tests/fixtures/note.txt ...` → 400.
-- Чеклист: [ ] BE-01 эндпоинт есть [ ] BE-02 оба кейса 400 [ ] BE-03 uuid уникален [ ] запись в БД создаётся [ ] Swagger `/docs` открывается.
-- Ревью: sub-agent review-code — валидация формата по содержимому, а не только по расширению; лимит размера не читает весь файл в память.
+- `curl "localhost:8000/api/v1/search?q=тест"` → в таблице `search_queries` появилась строка.
+- Повтор того же запроса (cache-hit) → новой строки нет (или есть — по выбранному правилу, зафиксировать в чеклисте).
+- Пагинация `?q=тест&from=10` → строку не пишет.
+- Чеклист: [ ] модель есть [ ] таблица создаётся [ ] запись пишется на search [ ] ошибка записи не роняет ответ [ ] `from>0`/cache-hit не дублируют.
 
 ---
 
-## Стадия 2 — Извлечение текста + чанкинг (BE-04, BE-05)
+## Стадия 2 — Эндпоинт чтения истории
 
 **Задачи**
-- `app/services/parser.py` — `extract_text(path) -> list[Page]` через pdfplumber (PDF) и python-docx (DOCX), с сохранением `page_number`.
-- `app/services/chunker.py` — разбиение на чанки 1000 симв., перекрытие 100 симв. между соседними.
-- Пайплайн upload → parse → chunk (пока без индексации).
+- `GET /api/v1/search/history?limit=20` → последние N запросов, новейшие первыми.
+- Схема ответа `SearchHistoryItem` (`query`, `results_count`, `created_at`) в `app/schemas/search.py`.
+- OpenAPI-описание + пример; статусы 200/422 (bad limit).
 
 **Гейт 2**
-- Команда: `pytest backend/tests/test_parser.py test_chunker.py -q`.
-- Проверка чанкинга: длина каждого чанка ≤ 1000; соседние перекрываются на 100; последние 100 симв. чанка N == первые 100 симв. чанка N+1.
-- Чеклист: [ ] BE-04 PDF и DOCX парсятся [ ] page_number проставлен [ ] BE-05 размер/перекрытие точны [ ] пустой файл не роняет пайплайн.
-- Ревью: sub-agent review-code — off-by-one в окне перекрытия; поведение на тексте < 1000 симв.; кодировки/битые файлы.
+- `curl "localhost:8000/api/v1/search/history?limit=5"` → JSON-массив ≤5, отсортирован по `created_at desc`.
+- `/docs` показывает эндпоинт.
+- Чеклист: [ ] сортировка [ ] limit валидируется (`ge=1,le=100`) [ ] пустая история → `[]`.
 
 ---
 
-## Стадия 3 — Elasticsearch: индекс + индексация (BE-06, BE-07)
+## Стадия 3 — Авторизация (упрощённая, без ролей)
+
+**Подход (лениво, без внешних зависимостей поверх нужного):**
+одна таблица пользователей + JWT-токен. Регистрация опциональна — можно засидить одного demo-пользователя.
 
 **Задачи**
-- `app/services/es.py` — клиент ES, создание индекса `documents` с русскоязычным анализатором (analysis-ru) при старте.
-- Маппинг: `file_name`, `page_number`, `chunk_id`, `text` (text + ru-analyzer).
-- Индексация: каждый чанк → документ ES с метаданными.
-- Связать с upload: после чанкинга статус документа → `indexed`.
+- `app/models/user.py` — `User`: `id: UUID`, `username: str (unique)`, `password_hash: str`, `created_at`.
+- Хеш пароля: `passlib[bcrypt]` (добавить в `pyproject.toml`). JWT: `pyjwt` (или `python-jose`), секрет из env (`JWT_SECRET`, добавить в `config.py` и `.env.example`).
+- Эндпоинты в `app/api/auth.py` (router prefix `/auth`):
+  - `POST /auth/register` — `{username, password}` → создать пользователя (409 если занят).
+  - `POST /auth/login` — `{username, password}` → `{access_token, token_type}` (401 при неверных).
+- Зависимость `get_current_user` (читает `Authorization: Bearer`, валидирует JWT, 401 при невалидном).
+- Защитить `POST /documents/upload` и `GET /search` этой зависимостью (`Depends(get_current_user)`).
+  `/health`, `/docs`, `/metrics` — оставить открытыми.
+- Сидинг demo-пользователя при старте (env `DEMO_USER`/`DEMO_PASSWORD`) — чтобы фронт/E2E могли залогиниться.
 
 **Гейт 3**
-- Команда: `curl localhost:9200/documents/_count` после загрузки → count == числу чанков.
-- Команда: `curl localhost:9200/documents/_mapping` → поля и ru-analyzer присутствуют.
-- Чеклист: [ ] BE-06 индекс+analysis-ru создан [ ] BE-07 все чанки с метаданными [ ] переиндексация идемпотентна (нет дублей).
-- Ревью: sub-agent review-code — bulk vs поштучная индексация; обработка недоступности ES; корректность analyzer.
+- `POST /auth/register` → `POST /auth/login` → получен токен.
+- `GET /search` без токена → 401; с токеном → 200.
+- `/docs` показывает схему авторизации (`HTTPBearer`), кнопка Authorize работает.
+- Чеклист: [ ] пароль хешируется (не хранится в открытом виде) [ ] JWT-секрет из env [ ] защищены upload+search [ ] health/metrics открыты [ ] demo-user засеян.
 
 ---
 
-## Стадия 4 — Поиск (BE-08, BE-09, + API-статусы)
+## Стадия 4 — Тесты
 
 **Задачи**
-- `GET /api/v1/search?q={query}` — `multi_match` по полю `text`.
-- Ответ JSON: `[{chunk_id, file_name, page, text, score}]`.
-- Подсветка: вернуть ES highlight по `text` (FE ждёт совпадения — согласовать формат).
-- HTTP-статусы: 200 / 400 (пустой q) / 404 / 500.
+- `tests/test_search_history.py`:
+  - поиск создаёт запись (мокнуть `search_chunks`, как в `test_search.py`);
+  - `from>0` не пишет;
+  - `GET /history` возвращает в правильном порядке;
+  - ошибка записи в БД не ломает `/search` (мок сессии, кидающий на commit).
+- `tests/test_auth.py`:
+  - register → login → доступ к защищённому эндпоинту с токеном (200);
+  - без токена / с битым токеном → 401;
+  - неверный пароль → 401; повторный register → 409.
+  - Обновить `conftest.py`/фикстуры: защищённые тесты шлют `Authorization` заголовок.
+- Держать общее покрытие ≥ 50% (сейчас 94% — запас есть).
 
 **Гейт 4**
-- Команда: `curl "localhost:8000/api/v1/search?q=алгоритм"` → массив с полями chunk_id/file_name/page/text/score, отсортирован по score desc.
-- Команда: `curl "localhost:8000/api/v1/search?q="` → 400.
-- Чеклист: [ ] BE-08 multi_match [ ] BE-09 все поля в ответе [ ] score присутствует [ ] статусы корректны [ ] формат согласован с FE.
-- Ревью: sub-agent review-code — инъекция в query-DSL; поведение при 0 результатов; пагинация (from/size) заложена для FE-07.
-
----
-
-## Стадия 5 — Redis-кеш (BE-10)
-
-**Задачи**
-- `app/services/cache.py` — ключ = нормализованный `q`, TTL 5 мин.
-- В `/search`: cache-hit → отдать из Redis, минуя ES.
-
-**Гейт 5**
-- Команда: два одинаковых запроса подряд; второй — из кеша (проверить логом/метрикой X-Cache или временем ответа).
-- Команда: `redis-cli keys 'search:*'` → ключ есть, `ttl` ≤ 300.
-- Чеклист: [ ] BE-10 hit/miss работает [ ] TTL=300 [ ] недоступность Redis не роняет поиск (graceful fallback).
-- Ревью: sub-agent review-code — нормализация ключа (регистр/пробелы); стойкость к падению Redis.
-
----
-
-## Стадия 6 — Документация API + чистка (API-требования, критерий «Качество кода»)
-
-**Задачи**
-- OpenAPI 3.0: описания эндпоинтов, схемы ответов/ошибок, примеры.
-- Docstrings на всех публичных функциях/классах (параметры, возврат) — PEP 8, понятные имена.
-- Единый обработчик ошибок → 400/404/500 с телом `{"detail": ...}`.
-
-**Гейт 6 (финальный)**
-- Команда: `ruff check backend/ && ruff format --check backend/`.
-- Команда: открыть `/docs` — все эндпоинты, коды 200/400/404/500 задокументированы.
-- Чеклист: [ ] Swagger полный [ ] docstrings везде [ ] линтер чистый [ ] нет хардкода секретов (всё из env).
-- Ревью: sub-agent review-architecture — границы services/api/models, отсутствие дублирования, утечки конфигов.
+- `uv run pytest -q` — зелёный.
+- `uv run ruff check && uv run ruff format --check` — чисто.
+- Ревью: `review-code` — гонки при записи истории, best-effort семантика, безопасность auth
+  (хеширование, exp у JWT, отсутствие утечки в логах, timing-safe сравнение).

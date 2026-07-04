@@ -1,92 +1,60 @@
-# План: DevOps (DO)
+# План доделок: DevOps (DO)
 
-**Роль:** контейнеризация, docker-compose, CI/CD, мониторинг, окружение.
-**Стек:** Docker / Docker Compose, Nginx, GitHub Actions, Prometheus, Grafana.
-**Файлы:** `backend/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`, `.env.example`, `.github/workflows/ci.yml`, `init.sh`, `README.md`.
+**Ветка:** `feat/do-init-seed`
+**Роль:** контейнеризация, CI/CD, мониторинг, окружение.
 
-Стадии по фичам. Гейт = ① runnable-проверка ② чеклист Done (ID ТЗ) ③ ревью sub-agent'ом.
+**Что не сделано:**
+- **DO-07** — `init.sh` сейчас dev-bootstrap (`uv sync` / `npm install`), а по ТЗ должен
+  **скачать 10 тестовых PDF-лекций из открытого доступа и загрузить их в систему через API**.
+- **CI не форсит порог покрытия** — `pytest` в CI бежит без `--cov`/`--cov-fail-under`.
+  Фактически покрытие 94%, но требование QA-01 (≥50%) в пайплайне не закреплено → регресс не отловится.
 
-Ревью гейта:
-> Task(subagent_type="review-code", prompt="Проверь стадию N плана devops: соответствие <ID>, отсутствие секретов в образах, healthchecks, порядок старта зависимостей. Верни confirmed-findings.")
+Гейт = ① запуск скрипта на чистом стеке ② проверка результата через API/UI.
 
 ---
 
-## Стадия 1 — Dockerfile backend (DO-01)
+## Стадия 1 — Переработка `init.sh` под DO-07
 
 **Задачи**
-- Multi-stage Dockerfile (Python 3.12-slim), установка из `requirements.txt`, запуск uvicorn.
-- Non-root user, кеш слоёв зависимостей.
+- Сохранить dev-bootstrap как отдельную цель (например, `dev-setup.sh`) ИЛИ оставить в `init.sh`
+  под флагом; основная задача `init.sh` — **сидинг данных**.
+- Скрипт (`bash`, `set -euo pipefail`):
+  1. Дождаться готовности бэка: poll `GET ${API_URL}/api/v1/health` до `{"status":"ok"}` (таймаут ~60с).
+  2. Скачать 10 открытых PDF-лекций в `./seed/` (`curl -L -o`).
+     - Источники: открытые лекции/методички (arXiv PDF, MIT OCW, любые CC-материалы). Список URL — массив в скрипте.
+     - **Не коммитить** скачанные PDF (ТЗ запрещает бинарники вне `/tests/fixtures`) → `seed/` в `.gitignore`.
+  3. Для каждого файла: `curl -f -F "file=@$f" ${API_URL}/api/v1/documents/upload`, собрать вернувшиеся UUID.
+  4. Вывести сводку: сколько загружено, сколько ошибок; ненулевой exit при провале.
+- Параметризовать `API_URL` (default `http://localhost:8000`, в compose — имя сервиса).
+- Идемпотентность: повторный запуск не должен падать (файлы уже скачаны → пропускать `curl` при наличии).
 
 **Гейт 1**
-- Команда: `docker build -t app ./backend` → успешно.
-- Команда: `docker run --rm -p8000:8000 app` → `/docs` отвечает.
-- Чеклист: [ ] DO-01 образ собирается [ ] запускается [ ] non-root [ ] нет секретов в слоях.
-- Ревью: sub-agent review-code — размер образа, кеширование слоёв, отсутствие dev-зависимостей в рантайме.
+- `docker compose up -d` → `./init.sh` → 10 успешных ответов upload.
+- `curl localhost:8000/api/v1/documents` → 10 записей.
+- Повторный `./init.sh` → не падает.
+- Чеклист: [ ] 10 PDF скачиваются [ ] грузятся через API [ ] `seed/` в gitignore [ ] health-poll есть [ ] идемпотентно.
 
 ---
 
-## Стадия 2 — Dockerfile frontend + Nginx (DO-02)
+## Стадия 2 — Проверка поиска по засеянным данным
 
 **Задачи**
-- Multi-stage: `node build` → отдача статики через `nginx:alpine`.
-- Nginx: gzip, проксирование `/api` на backend, SPA-fallback на `index.html`.
+- После сидинга дождаться индексации (poll `GET /documents` до `status=indexed` у всех, таймаут).
+- Прогнать пробный `GET /search?q=<термин из лекций>` → непустая выдача (можно как финальный echo в скрипте).
 
 **Гейт 2**
-- Команда: `docker build -t front ./frontend && docker run --rm -p8080:80 front` → страница отдаётся.
-- Чеклист: [ ] DO-02 сборка+Nginx [ ] статика отдаётся [ ] /api проксируется [ ] SPA-роуты не 404.
-- Ревью: sub-agent review-code — конфиг Nginx (кеш-хедеры, проксирование), отсутствие source-map в проде.
+- Поиск по реальному термину из загруженных лекций возвращает результаты с подсветкой.
+- Чеклист: [ ] все документы дошли до `indexed` [ ] поиск не пустой.
 
 ---
 
-## Стадия 3 — docker-compose + окружение (DO-03, DO-04)
+## Стадия 3 — Гейт покрытия в CI (QA-01)
 
 **Задачи**
-- `docker-compose.yml`: `app`, `front`, `postgres`, `elasticsearch`, `redis`.
-- `depends_on` + healthchecks (ES/PG готовы раньше app).
-- Все секреты через env; `.env.example` в репо, `.env` в `.gitignore`.
+- В `.github/workflows/ci.yml`, job `backend`: заменить `uv run pytest -q`
+  на `uv run pytest -q --cov=app --cov-fail-under=50`.
+- Опционально: вывести отчёт покрытия в лог job (`--cov-report=term-missing`).
 
 **Гейт 3**
-- Команда: `docker compose up -d` **одной командой** → все сервисы `healthy`.
-- Команда: сквозной сценарий (загрузка→поиск) работает через поднятый стек.
-- Чеклист: [ ] DO-03 5 сервисов [ ] DO-04 секреты в env, .env.example есть [ ] стартует одной командой [ ] healthchecks.
-- Ревью: sub-agent review-security — нет паролей в compose/образах; сети/порты не торчат лишнего наружу.
-
----
-
-## Стадия 4 — CI/CD GitHub Actions (DO-05)
-
-**Задачи**
-- `.github/workflows/ci.yml`: на push в `main` — линтеры (ruff, eslint) + базовые тесты (pytest).
-- При успехе — сборка образов (`docker build` backend+frontend).
-
-**Гейт 4**
-- Команда: пуш в ветку → workflow зелёный; лог показывает линт+тесты+build.
-- Кейс: намеренно сломать линт → workflow красный (гейт реально блокирует).
-- Чеклист: [ ] DO-05 линтеры [ ] тесты [ ] сборка образов при успехе [ ] падает на ошибке.
-- Ревью: sub-agent review-code — кеш зависимостей в CI, отсутствие секретов в логах, matrix при необходимости.
-
----
-
-## Стадия 5 — Мониторинг Prometheus + Grafana (DO-06)
-
-**Задачи**
-- Backend отдаёт метрики (`/metrics`): счётчик запросов к `/search`, среднее время ответа.
-- Prometheus + Grafana в compose; дашборд с этими метриками.
-
-**Гейт 5**
-- Команда: `curl localhost:8000/metrics` → метрики есть; Grafana-дашборд рисует RPS и latency `/search`.
-- Чеклист: [ ] DO-06 Prometheus собирает [ ] Grafana-дашборд [ ] метрики /search присутствуют.
-- Ревью: sub-agent review-code — корректность лейблов метрик, отсутствие high-cardinality, provisioning дашборда как код.
-
----
-
-## Стадия 6 — init.sh + README (DO-07, критерий «Документация»)
-
-**Задачи**
-- `init.sh`: скачивает 10 тестовых PDF-лекций из открытого доступа, грузит через `/api/v1/documents/upload`.
-- `README.md`: запуск одной командой, переменные окружения, архитектура.
-
-**Гейт 6 (финальный)**
-- Команда: чистое окружение → `docker compose up -d && ./init.sh` → 10 документов проиндексированы, поиск находит.
-- Чеклист: [ ] DO-07 init.sh качает+грузит 10 файлов [ ] README покрывает запуск+env [ ] «up одной командой» воспроизводится с нуля.
-- Ревью: sub-agent review-code — идемпотентность init.sh, обработка ошибок скачивания/загрузки, ретраи на неготовый API.
+- CI зелёный на текущем коде; шаг **падает** при покрытии < 50% (проверить, временно занизив порог до 99).
+- Ревью: `review-code` — нет секретов/бинарников в коммите, скрипт не игнорит ошибки `curl` (`-f`).

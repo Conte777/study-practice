@@ -51,6 +51,7 @@ test.describe("critical path", () => {
     await expect(card.getByTestId("result-page")).toBeVisible();
     await expect(card.getByTestId("result-score")).toBeVisible();
     // Highlight contract: matched term wrapped in <mark> (sanitized on FE).
-    await expect(card.locator("mark")).toBeVisible();
+    // .first(): a multi-word query yields one <mark> per term, so scope to one.
+    await expect(card.locator("mark").first()).toBeVisible();
   });
 });

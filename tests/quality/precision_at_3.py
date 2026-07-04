@@ -4,13 +4,11 @@
 For 10 reference queries with a known expected document, check whether that
 document lands in the top-3 results, then print a Markdown table + the metric.
 
-Run (backend must be up):
+Run (backend up, golden set seeded via tests/quality/seed.py):
     HOST=http://localhost:8000 python tests/quality/precision_at_3.py
 
-NOTE ON THE MOCK: the current /search returns a *fixed* pair (ok.pdf, ok.docx)
-regardless of the query, so only queries whose expected doc is one of those two
-can hit. The number below therefore reflects the mock, not real ranking — the
-golden set is the reusable instrument for the real Elasticsearch stage.
+/search requires auth, so this logs in as the demo user first and sends the
+bearer token with each query.
 """
 
 from __future__ import annotations
@@ -23,7 +21,19 @@ import urllib.request
 from dataclasses import dataclass
 
 HOST = os.environ.get("HOST", "http://localhost:8000").rstrip("/")
+USER = os.environ.get("DEMO_USER", "demo")
+PASSWORD = os.environ.get("DEMO_PASSWORD", "demo12345")
 TOP_K = 3
+
+
+def login() -> str:
+    """Return a bearer token for the demo account."""
+    body = json.dumps({"username": USER, "password": PASSWORD}).encode()
+    req = urllib.request.Request(
+        f"{HOST}/api/v1/auth/login", data=body, headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310 (trusted local host)
+        return json.load(resp)["access_token"]
 
 
 @dataclass(frozen=True)
@@ -49,11 +59,13 @@ GOLDEN: list[Golden] = [
 ]
 
 
-def search(query: str) -> list[str]:
+def search(query: str, token: str) -> list[str]:
     """Return the ordered list of result file_names for a query."""
     qs = urllib.parse.urlencode({"q": query, "size": TOP_K})
-    url = f"{HOST}/api/v1/search?{qs}"
-    with urllib.request.urlopen(url, timeout=10) as resp:  # noqa: S310 (trusted local host)
+    req = urllib.request.Request(
+        f"{HOST}/api/v1/search?{qs}", headers={"Authorization": f"Bearer {token}"}
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310 (trusted local host)
         body = json.load(resp)
     return [r["file_name"] for r in body["results"]]
 
@@ -67,11 +79,12 @@ def position_of(expected: str, files: list[str]) -> int | None:
 
 
 def main() -> int:
+    token = login()
     rows = []
     hits = 0
     for g in GOLDEN:
         try:
-            files = search(g.query)
+            files = search(g.query, token)
         except Exception as exc:  # noqa: BLE001 — surface any transport error in the table
             rows.append((g.query, g.expected_file, f"ERROR: {exc}", False))
             continue
@@ -94,9 +107,7 @@ def main() -> int:
         miss = [r[0] for r in rows if not r[3]]
         print(
             f"\n> {len(miss)} miss(es): {', '.join(miss)}.\n"
-            "> On the mock, only queries expecting `ok.pdf`/`ok.docx` can hit "
-            "(fixed results). Re-run against the real Elasticsearch index to get "
-            "a meaningful ranking metric."
+            "> Ensure the golden set is seeded (tests/quality/seed.py) and indexed."
         )
     return 0
 

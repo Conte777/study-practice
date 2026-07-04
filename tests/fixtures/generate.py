@@ -62,11 +62,69 @@ def write_empty_docx(path: Path) -> None:
     Document().save(str(path))
 
 
+# QA-05 golden set: one topical document per reference query in
+# tests/quality/precision_at_3.py. Text is distinctive enough that BM25 ranks
+# each document top-1 for its own query. A few lines also carry the load-test
+# HOT_QUERIES terms ("database indexing", "final exam schedule", ...) so the
+# QA-04 hot bucket returns non-empty results.
+_GOLDEN_PDF: dict[str, str] = {
+    "ml-lecture.pdf": (
+        "Machine learning lecture notes. This lecture introduces supervised and "
+        "unsupervised machine learning, gradient descent, and neural networks. It "
+        "also covers database indexing strategies for storing feature vectors."
+    ),
+    "schedule.pdf": (
+        "Final exam schedule for the spring semester. This schedule lists exam "
+        "dates, times, and rooms for every course. Check the final exam schedule "
+        "before the spring examination week begins."
+    ),
+    "thesis-guide.pdf": (
+        "Thesis submission guidelines. These guidelines describe the thesis "
+        "submission process, formatting requirements, and deadlines for graduate "
+        "students submitting a thesis to the committee."
+    ),
+    "library.pdf": (
+        "Library opening hours. The university library opening hours are Monday to "
+        "Friday from 8am to 10pm. Weekend library hours are shorter. Check opening "
+        "hours during public holidays."
+    ),
+}
+_GOLDEN_DOCX: dict[str, str] = {
+    "scholarship.docx": (
+        "Scholarship application form. Complete this scholarship application form "
+        "to apply for merit and need-based financial aid. Submit the scholarship "
+        "application before the deadline."
+    ),
+    "registration.docx": (
+        "Course registration deadline. The course registration deadline for the "
+        "upcoming semester is approaching. Register for your courses before the "
+        "registration deadline."
+    ),
+}
+
+
+def write_golden(here: Path) -> None:
+    from reportlab.pdfgen import canvas
+
+    for name, text in _GOLDEN_PDF.items():
+        c = canvas.Canvas(str(here / name))
+        c.drawString(72, 720, text)
+        c.showPage()
+        c.save()
+    for name, text in _GOLDEN_DOCX.items():
+        from docx import Document
+
+        doc = Document()
+        doc.add_paragraph(text)
+        doc.save(str(here / name))
+
+
 def main() -> None:
     write_ok_pdf(HERE / "ok.pdf")
     write_fonts_pdf(HERE / "fonts.pdf")
     write_ok_docx(HERE / "ok.docx")
     write_empty_docx(HERE / "empty.docx")
+    write_golden(HERE)
 
     # empty.pdf: zero-byte file — trips the size==0 validation branch.
     (HERE / "empty.pdf").write_bytes(b"")

@@ -7,6 +7,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.api import documents, search
 from app.core.config import settings
@@ -51,6 +52,10 @@ async def unhandled_exception_handler(_request: Request, exc: Exception) -> JSON
     logger.exception("Unhandled error")
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
+
+# DO-06: default metrics = http_requests_total + http_request_duration_seconds, labelled
+# per handler (RPS & latency of /search fall out of this). Exposes GET /metrics.
+Instrumentator().instrument(app).expose(app)
 
 app.add_middleware(
     CORSMiddleware,

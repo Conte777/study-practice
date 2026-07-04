@@ -8,7 +8,11 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   const submit = async (action: typeof login) => {
-    if (!username || !password || busy) return;
+    if (busy) return;
+    if (!username || !password) {
+      setError("Введите имя пользователя и пароль");
+      return;
+    }
     setBusy(true);
     setError(null);
     const res = await action(username, password);

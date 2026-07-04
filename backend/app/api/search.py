@@ -91,6 +91,7 @@ async def search(
 )
 async def search_history(
     db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_user)],
     limit: int = Query(20, ge=1, le=100, description="Max number of entries to return"),
 ) -> list[SearchHistoryItem]:
     """Return the newest ``limit`` search-history entries (may be empty)."""

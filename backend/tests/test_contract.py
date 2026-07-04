@@ -68,8 +68,11 @@ def test_upload_db_failure_cleans_up_temp_file(monkeypatch):
     from fastapi.testclient import TestClient
 
     import app.api.documents as documents_mod
+    from app.api.auth import get_current_user
     from app.main import app
+    from app.models import User
 
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: User(username="t"))
     captured = {}
     real_unlink = documents_mod.unlink
 
@@ -96,7 +99,11 @@ def test_unhandled_error_returns_500_with_detail_body(monkeypatch):
     from fastapi.testclient import TestClient
 
     import app.api.search as search_mod
+    from app.api.auth import get_current_user
     from app.main import app
+    from app.models import User
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user, lambda: User(username="t"))
 
     def boom(*a, **k):
         raise RuntimeError("boom")

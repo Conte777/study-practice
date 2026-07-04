@@ -20,9 +20,10 @@ import pytest  # noqa: E402 — must follow env setup above
 from docx import Document as DocxDocument  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.api.auth import get_current_user  # noqa: E402
 from app.core.db import engine  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Base  # noqa: E402
+from app.models import Base, User  # noqa: E402
 
 
 def pytest_configure(config):
@@ -69,4 +70,18 @@ def _schema():
 
 @pytest.fixture
 def client() -> TestClient:
+    """Authenticated client: auth is bypassed so tests focus on their endpoint.
+
+    Real auth behaviour is exercised separately in ``test_auth.py`` via ``raw_client``.
+    """
+    app.dependency_overrides[get_current_user] = lambda: User(username="tester")
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest.fixture
+def raw_client() -> TestClient:
+    """Client with real auth enforced (no dependency override)."""
     return TestClient(app)

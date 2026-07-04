@@ -6,25 +6,38 @@ import type {
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
-async function json<T>(res: Response): Promise<T> {
+// Every service call resolves (never rejects) so callers never need try/catch or risk an unhandled rejection.
+export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };
+
+async function request<T>(run: () => Promise<Response>): Promise<ApiResult<T>> {
+  let res: Response;
+  try {
+    res = await run();
+  } catch {
+    return { ok: false, error: "Нет соединения с сервером" };
+  }
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { detail?: string };
-    throw new Error(body.detail ?? `HTTP ${res.status}`);
+    return { ok: false, error: body.detail ?? `HTTP ${res.status}` };
   }
-  return res.json() as Promise<T>;
+  try {
+    return { ok: true, data: (await res.json()) as T };
+  } catch {
+    return { ok: false, error: "Некорректный ответ сервера" };
+  }
 }
 
-export async function uploadDocument(file: File): Promise<DocumentUploadResponse> {
+export function uploadDocument(file: File): Promise<ApiResult<DocumentUploadResponse>> {
   const form = new FormData();
   form.append("file", file);
-  return json(await fetch(`${BASE_URL}/documents/upload`, { method: "POST", body: form }));
+  return request(() => fetch(`${BASE_URL}/documents/upload`, { method: "POST", body: form }));
 }
 
-export async function listDocuments(): Promise<DocumentInfo[]> {
-  return json(await fetch(`${BASE_URL}/documents`));
+export function listDocuments(): Promise<ApiResult<DocumentInfo[]>> {
+  return request(() => fetch(`${BASE_URL}/documents`));
 }
 
-export async function search(q: string, from = 0, size = 10): Promise<SearchResponse> {
+export function search(q: string, from = 0, size = 10): Promise<ApiResult<SearchResponse>> {
   const params = new URLSearchParams({ q, from: String(from), size: String(size) });
-  return json(await fetch(`${BASE_URL}/search?${params}`));
+  return request(() => fetch(`${BASE_URL}/search?${params}`));
 }

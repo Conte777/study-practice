@@ -1,0 +1,43 @@
+{
+  "uid": "search-metrics",
+  "title": "Search API",
+  "tags": ["backend", "search"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "/search RPS",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(http_requests_total{handler=\"/api/v1/search\"}[1m]))",
+          "legendFormat": "rps",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "/search avg latency",
+      "type": "timeseries",
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(http_request_duration_seconds_sum{handler=\"/api/v1/search\"}[5m])) / sum(rate(http_request_duration_seconds_count{handler=\"/api/v1/search\"}[5m]))",
+          "legendFormat": "avg",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

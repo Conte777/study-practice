@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 jobs:
@@ -28,6 +29,16 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+
+  build-images:
+    needs: [backend, frontend]  # only after lint + tests pass
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -t backend ./backend
+      - run: docker build -t frontend ./frontend

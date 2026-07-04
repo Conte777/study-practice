@@ -2,6 +2,8 @@ from pydantic import BaseModel
 
 
 class SearchResult(BaseModel):
+    """One matched chunk from a search query."""
+
     chunk_id: str
     file_name: str
     page: int
@@ -14,5 +16,7 @@ class SearchResult(BaseModel):
 
 
 class SearchResponse(BaseModel):
+    """A page of search results with the total match count."""
+
     total: int  # FE-07 pagination
     results: list[SearchResult]

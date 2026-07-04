@@ -1,4 +1,14 @@
+from datetime import datetime
+
 from pydantic import BaseModel
+
+
+class SearchHistoryItem(BaseModel):
+    """One past search, newest-first in the history listing."""
+
+    query: str
+    results_count: int
+    created_at: datetime
 
 
 class SearchResult(BaseModel):

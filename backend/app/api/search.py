@@ -4,11 +4,12 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
 from app.models import SearchQuery
-from app.schemas import ErrorResponse, SearchResponse, SearchResult
+from app.schemas import ErrorResponse, SearchHistoryItem, SearchResponse, SearchResult
 from app.services import cache
 from app.services.es import SearchHit, search_chunks
 
@@ -77,3 +78,24 @@ async def search(
     if from_ == 0:
         _record_history(db, q, total)
     return response
+
+
+@router.get(
+    "/search/history",
+    response_model=list[SearchHistoryItem],
+    summary="Recent search history",
+    description="Return the most recent search queries, newest first.",
+    responses={422: {"model": ErrorResponse, "description": "Invalid limit"}},
+)
+async def search_history(
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = Query(20, ge=1, le=100, description="Max number of entries to return"),
+) -> list[SearchHistoryItem]:
+    """Return the newest ``limit`` search-history entries (may be empty)."""
+    rows = db.scalars(
+        select(SearchQuery).order_by(SearchQuery.created_at.desc()).limit(limit)
+    ).all()
+    return [
+        SearchHistoryItem(query=r.query, results_count=r.results_count, created_at=r.created_at)
+        for r in rows
+    ]

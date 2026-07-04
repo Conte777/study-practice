@@ -1,8 +1,9 @@
-"""Full-text search endpoint backed by Elasticsearch."""
+"""Full-text search endpoint backed by Elasticsearch with a Redis result cache."""
 
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ErrorResponse, SearchResponse, SearchResult
+from app.services import cache
 from app.services.es import search_chunks
 
 router = APIRouter(tags=["search"])
@@ -28,7 +29,8 @@ def _to_result(hit: dict) -> SearchResult:
     summary="Full-text search",
     description=(
         "Search indexed document chunks with a Russian-analyzed `multi_match` "
-        "over the chunk text. Results are score-ordered and highlighted."
+        "over the chunk text. Results are score-ordered and highlighted; "
+        "identical queries are served from a 5-minute Redis cache."
     ),
     responses={400: {"model": ErrorResponse, "description": "Empty query"}},
 )
@@ -41,5 +43,11 @@ async def search(
     if not q.strip():
         raise HTTPException(status_code=400, detail="Query 'q' must not be empty")
 
+    cached = cache.get_cached(q, from_, size)
+    if cached is not None:
+        return SearchResponse(**cached)
+
     total, hits = search_chunks(q, from_, size)
-    return SearchResponse(total=total, results=[_to_result(h) for h in hits])
+    response = SearchResponse(total=total, results=[_to_result(h) for h in hits])
+    cache.set_cached(q, from_, size, response.model_dump())
+    return response

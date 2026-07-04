@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.auth import get_current_user
 from app.core.db import get_db
-from app.models import SearchQuery
+from app.models import SearchQuery, User
 from app.schemas import ErrorResponse, SearchHistoryItem, SearchResponse, SearchResult
 from app.services import cache
 from app.services.es import SearchHit, search_chunks
@@ -58,6 +59,7 @@ def _to_result(hit: SearchHit) -> SearchResult:
 )
 async def search(
     db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_user)],
     q: str = Query(..., description="Search query"),
     from_: int = Query(0, alias="from", ge=0, description="Pagination offset"),
     size: int = Query(10, ge=1, le=100, description="Page size"),

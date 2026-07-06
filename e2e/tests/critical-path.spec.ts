@@ -39,7 +39,7 @@ test.describe("critical path", () => {
     });
 
     // --- Search ---
-    await page.getByRole("button", { name: "Поиск" }).click();
+    await page.getByRole("link", { name: "Поиск" }).click();
     await page.getByTestId("search-input").fill("knowledge base");
     await page.getByTestId("search-button").click();
 

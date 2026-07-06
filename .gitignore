@@ -19,3 +19,5 @@ e2e/playwright-report/
 tests/fixtures/*
 !tests/fixtures/README.md
 !tests/fixtures/generate.py
+
+*.docx

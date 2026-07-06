@@ -95,8 +95,14 @@ export default function UploadPage() {
         />
       </div>
       <ul data-testid="doc-list" className="doc-list">
-        {items.map((item) => (
-          <li data-testid="upload-item" className="doc-list__item" key={item.id}>
+        {items.map((item, i) => (
+          <li
+            data-testid="upload-item"
+            className="doc-list__item"
+            key={item.id}
+            // stagger entrance top→bottom; nth-child in CSS caps at 5, so drive it by index
+            style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}
+          >
             <span className="doc-list__name">{item.fileName}</span>
             <span className="doc-list__date">{new Date(item.date).toLocaleString()}</span>
             <span data-testid="upload-status" className={`status status--${item.status}`}>

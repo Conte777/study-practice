@@ -283,36 +283,41 @@ input:focus-visible {
   overflow: hidden;
 }
 
+/* Backend status is discrete (no %), so pending is indeterminate:
+   a segment sweeps L→R forever — always visibly moving. */
 .progress__fill {
   height: 100%;
-  width: 0;
+  width: 40%;
   border-radius: 3px;
   background: var(--accent);
-  animation: fill-progress 12s cubic-bezier(0.15, 0.75, 0.2, 1) forwards;
+  animation: progress-sweep 1.4s ease-in-out infinite;
 }
 
 .progress--done .progress__fill {
   animation: none;
   width: 100%;
+  transform: none;
   background: var(--ok);
   transition:
     width 0.3s ease-out,
     background 0.3s;
 }
 
-@keyframes fill-progress {
+@keyframes progress-sweep {
   from {
-    width: 0;
+    transform: translateX(-110%);
   }
   to {
-    width: 90%;
+    transform: translateX(360%);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .progress__fill {
     animation: none;
-    width: 60%;
+    width: 100%;
+    transform: none;
+    opacity: 0.5;
   }
 }
 

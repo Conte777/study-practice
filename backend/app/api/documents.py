@@ -73,9 +73,10 @@ async def upload_document(
     summary="List documents",
     description="Return all uploaded documents, newest first.",
 )
-async def list_documents(db: Annotated[Session, Depends(get_db)]) -> list[DocumentInfo]:
+def list_documents(db: Annotated[Session, Depends(get_db)]) -> list[DocumentInfo]:
     """Return all documents ordered by upload time (newest first)."""
-    rows = db.scalars(select(Document).order_by(Document.uploaded_at.desc())).all()
+    # ponytail: defensive cap, not UX pagination — FE fetches the full list & polls by id.
+    rows = db.scalars(select(Document).order_by(Document.uploaded_at.desc()).limit(500)).all()
     return [
         DocumentInfo(
             id=r.id,

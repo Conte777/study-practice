@@ -37,5 +37,5 @@ class Document(Base):
         String(16), nullable=False, default=DocumentStatus.uploaded
     )
     uploaded_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utcnow
+        DateTime(timezone=True), nullable=False, default=_utcnow, index=True
     )

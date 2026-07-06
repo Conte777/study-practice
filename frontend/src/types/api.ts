@@ -20,6 +20,11 @@ export interface TokenResponse {
   token_type: string;
 }
 
+export interface Credentials {
+  username: string;
+  password: string;
+}
+
 export interface SearchHistoryItem {
   query: string;
   results_count: number;

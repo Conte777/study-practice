@@ -57,7 +57,7 @@ def _to_result(hit: SearchHit) -> SearchResult:
         500: {"model": ErrorResponse, "description": "Elasticsearch or server error"},
     },
 )
-async def search(
+def search(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(get_current_user)],
     q: str = Query(..., description="Search query"),
@@ -89,7 +89,7 @@ async def search(
     description="Return the most recent search queries, newest first.",
     responses={422: {"model": ErrorResponse, "description": "Invalid limit"}},
 )
-async def search_history(
+def search_history(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(get_current_user)],
     limit: int = Query(20, ge=1, le=100, description="Max number of entries to return"),

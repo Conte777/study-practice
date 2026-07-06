@@ -117,7 +117,18 @@ export default function SearchPage() {
         </button>
       </div>
 
-      {loading && <p role="status">Загрузка результатов…</p>}
+      {loading && (
+        <>
+          <p role="status" className="sr-only">
+            Загрузка результатов…
+          </p>
+          <ul className="skeletons" aria-hidden="true">
+            {Array.from({ length: 4 }, (_, i) => (
+              <li key={i} className="skeleton-card" />
+            ))}
+          </ul>
+        </>
+      )}
       {error && <p className="status status--error">{error}</p>}
 
       {!loading && total !== null && results.length === 0 && (

@@ -129,18 +129,19 @@ input:focus-visible {
   text-align: left;
 }
 
-.login__actions {
-  display: flex;
-  gap: 8px;
+.login__form button {
+  margin-top: 4px;
 }
 
-.login__actions button {
-  flex: 1;
+.login__switch {
+  margin: 16px 0 0;
+  font-size: 14px;
+  color: var(--text);
 }
 
-.login__actions button[data-testid="register-submit"] {
-  background: transparent;
+.login__switch a {
   color: var(--accent);
+  font-weight: 500;
 }
 
 /* ---- Dropzone ---- */
@@ -187,11 +188,23 @@ input:focus-visible {
 }
 
 .doc-list__item {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px 12px;
   align-items: center;
-  justify-content: space-between;
+}
+
+.doc-list__date {
+  justify-self: center;
+  text-align: center;
+}
+
+.doc-list__item .status {
+  justify-self: end;
+}
+
+.doc-list__item .progress {
+  grid-column: 1 / -1;
 }
 
 .doc-list__name {
@@ -265,28 +278,42 @@ input:focus-visible {
   flex-basis: 100%;
   width: 100%;
   height: 6px;
-  border: none;
   border-radius: 3px;
-  appearance: none;
-  -webkit-appearance: none;
   background: var(--accent-bg);
   overflow: hidden;
 }
 
-.progress::-webkit-progress-bar {
-  background: var(--accent-bg);
+.progress__fill {
+  height: 100%;
+  width: 0;
   border-radius: 3px;
-}
-
-.progress::-webkit-progress-value,
-.progress::-moz-progress-bar {
   background: var(--accent);
-  border-radius: 3px;
+  animation: fill-progress 12s cubic-bezier(0.15, 0.75, 0.2, 1) forwards;
 }
 
-.progress--done::-webkit-progress-value,
-.progress--done::-moz-progress-bar {
+.progress--done .progress__fill {
+  animation: none;
+  width: 100%;
   background: var(--ok);
+  transition:
+    width 0.3s ease-out,
+    background 0.3s;
+}
+
+@keyframes fill-progress {
+  from {
+    width: 0;
+  }
+  to {
+    width: 90%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress__fill {
+    animation: none;
+    width: 60%;
+  }
 }
 
 /* ---- Search bar ---- */
@@ -441,10 +468,23 @@ input:focus-visible {
     width: 100%;
   }
 
-  .doc-list__item,
   .result-card {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .doc-list__item {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .doc-list__item .status {
+    justify-self: start;
+  }
+
+  .doc-list__date {
+    justify-self: start;
+    text-align: left;
   }
 }
 

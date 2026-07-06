@@ -104,15 +104,17 @@ export default function UploadPage() {
               {item.status === "error" && item.error ? `: ${item.error}` : ""}
             </span>
             {item.status !== "error" && (
-              // Backend status is discrete (no %), so pending is an indeterminate bar
-              // (native <progress> without value); indexed fills to 100%.
-              <progress
+              // Backend status is discrete (no %), so pending fakes progress via CSS
+              // (fill crawls 0→90% while uploaded/indexing); indexed snaps to 100%.
+              <div
                 data-testid="upload-progress"
                 className={`progress${item.status === "indexed" ? " progress--done" : ""}`}
+                role="progressbar"
                 aria-label={STATUS_LABELS[item.status]}
-                max={100}
-                value={item.status === "indexed" ? 100 : undefined}
-              />
+                aria-valuetext={STATUS_LABELS[item.status]}
+              >
+                <div className="progress__fill" />
+              </div>
             )}
           </li>
         ))}

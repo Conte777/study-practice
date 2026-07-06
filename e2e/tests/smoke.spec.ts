@@ -10,5 +10,11 @@ test("login gate exposes its contract selectors", async ({ page }) => {
   await expect(page.getByTestId("login-username")).toBeVisible();
   await expect(page.getByTestId("login-password")).toBeVisible();
   await expect(page.getByTestId("login-submit")).toBeVisible();
+});
+
+test("register page exposes its contract selectors", async ({ page }) => {
+  await page.goto("/register");
+  await expect(page.getByTestId("register-username")).toBeVisible();
+  await expect(page.getByTestId("register-password")).toBeVisible();
   await expect(page.getByTestId("register-submit")).toBeVisible();
 });

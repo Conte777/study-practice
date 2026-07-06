@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Navigate, Outlet, Route, Routes } from "react-router";
 import "./App.css";
 import UploadPage from "./pages/UploadPage";
 import SearchPage from "./pages/SearchPage";
 import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
 import { getToken, logout } from "./services/auth";
 
 // auth.ts fires "auth" on login/logout/401 — re-read the token to flip the gate.
@@ -49,14 +50,11 @@ function ProtectedLayout() {
   return useAuthed() ? <AppShell /> : <Navigate to="/login" replace />;
 }
 
-// Token already set → skip login; "auth" event redirects here after login().
-function LoginGate() {
+// Public auth pages: token already set → skip to /search ("auth" event
+// redirects here after a successful login/register).
+function AuthGate({ children }: { children: ReactNode }) {
   if (useAuthed()) return <Navigate to="/search" replace />;
-  return (
-    <main className="login-view">
-      <LoginPage />
-    </main>
-  );
+  return <main className="login-view">{children}</main>;
 }
 
 export default function App() {
@@ -66,7 +64,8 @@ export default function App() {
         <Route path="/upload" element={<UploadPage />} />
         <Route path="/search" element={<SearchPage />} />
       </Route>
-      <Route path="/login" element={<LoginGate />} />
+      <Route path="/login" element={<AuthGate><LoginPage /></AuthGate>} />
+      <Route path="/register" element={<AuthGate><RegisterPage /></AuthGate>} />
       <Route path="/" element={<Navigate to="/search" replace />} />
       <Route path="*" element={<Navigate to="/search" replace />} />
     </Routes>

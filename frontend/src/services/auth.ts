@@ -1,5 +1,5 @@
 import type { ApiResult } from "./api";
-import type { TokenResponse } from "../types/api";
+import type { Credentials, TokenResponse } from "../types/api";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000/api/v1";
 const TOKEN_KEY = "token";
@@ -17,12 +17,13 @@ export function clearToken() {
 export const logout = clearToken;
 
 async function auth(path: "login" | "register", username: string, password: string): Promise<ApiResult<void>> {
+  const creds: Credentials = { username, password };
   let res: Response;
   try {
     res = await fetch(`${BASE_URL}/auth/${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify(creds),
     });
   } catch {
     return { ok: false, error: "Нет соединения с сервером" };

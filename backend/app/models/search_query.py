@@ -27,5 +27,5 @@ class SearchQuery(Base):
     query: Mapped[str] = mapped_column(String(1024), nullable=False)
     results_count: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now(), index=True
     )
